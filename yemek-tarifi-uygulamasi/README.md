@@ -46,46 +46,6 @@ Lua veri kaynağı olarak kullanılmaz. Tarif içerikleri JSON’dan okunur; tar
         └── App.css           # Stiller ve animasyonlar
 ```
 
-## Gereksinimler
-
-- Go 1.25 veya üzeri
-- Node.js ve npm
-- Wails CLI
-
-Wails CLI kurulumu:
-
-```powershell
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
-```
-
-## Kurulum ve çalıştırma
-
-Proje kök dizininde:
-
-```powershell
-wails dev
-```
-
-## Test ve derleme
-
-Go testleri:
-
-```powershell
-go test ./...
-```
-
-Frontend üretim derlemesi:
-
-```powershell
-Set-Location frontend
-npm.cmd run build
-```
-
-Masaüstü üretim paketi:
-
-```powershell
-wails build
-```
 
 ## Tarif verisi ekleme
 
