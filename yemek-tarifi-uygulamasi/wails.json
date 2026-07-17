@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "yemek-tarifi-uygulamasi",
+  "outputfilename": "yemek-tarifi-uygulamasi",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Ayşegül Avcı",
+    "email": "152927504+KLU5230505062@users.noreply.github.com"
+  }
+}
