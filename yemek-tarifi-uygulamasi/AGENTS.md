@@ -6,88 +6,42 @@
 
 - Backend: Go (`main.go`, `app.go`)
 - Frontend: React + TypeScript + Vite (`frontend/src`)
-- Tarif verisi: JSON (`tarifler/tarifler.json`); tarif akışı algoritması: Lua (`lua/tarif_akisi.lua`)
+- Tarif metadata dosyaları: `tarifler/*.json`
+- Bağımsız tarif programları: `lua/tarifler/*.lua`
 - Diller: Türkçe ve İngilizce
 
-## Dizinler
+## Mimari kurallar
 
-| Konum | Amaç |
-| --- | --- |
-| `main.go` | Wails pencere ve gömülü varlık yapılandırması |
-| `app.go` | Tarif modelleri, JSON okuma/doğrulama, Lua akış köprüsü, Wails metotları |
-| `tarifler/tarifler.json` | Tarif içerikleri ve İngilizce çevirileri |
-| `lua/tarif_akisi.lua` | Tarif adımı geçiş, süre, ilerleme ve bitiş algoritması |
-| `frontend/src/App.tsx` | Ekranlar, filtreleme, tarif akışı, dil seçimi |
-| `frontend/src/App.css` | Stil ve animasyonlar |
-| `frontend/wailsjs/`, `frontend/dist/` | Üretilmiş dosyalar; elle düzenlemeyin |
+- Her tarifin metadata bilgisi aynı taban adlı ayrı JSON dosyasındadır; `13_kofte.json` otomatik olarak `13_kofte.lua` ile eşleşir.
+- JSON yalnızca kimlik, başlık, açıklama, kategori, süre, zorluk ve emoji tutar.
+- Malzemeler, hesaplamalar, hazırlama/pişirme sırası, kararlar ve döngüler ilgili Lua tarifinde bulunur.
+- Tarifler ortak bir adım motoru, standart ileri/geri akışı veya ortak Lua yardımcı modülü kullanmaz.
+- Küçük tekrarlar gerektiğinde yalnızca ilgili tarif dosyasında `local function` tanımlayın.
+- Go Lua ortamına `dialog_number`, `dialog_choice`, `dialog_confirm`, `dialog_ok`, `show_list`, `show_timer`, `progress`, `success` ve `fail` sağlar.
+- React tarif sırası hesaplamaz; Go'dan gelen UI komutunu gösterip cevabı bekleyen oturum/istek kimliğiyle geri yollar.
+- Her yeni kullanıcı metnini Türkçe ve İngilizce ekleyin. Aktif oturum sırasında dil değişmez.
+- Yeni görsellerde Lua yalnızca `visual_key` gönderir; frontend bilinen yerel çizime eşler.
+- `success()` veya `fail()` her Lua programının terminal çağrısıdır.
+- Lua dosyalarını kısa bölüm yorumlarıyla açıklayın ve `stylua.toml` biçimini koruyun.
 
 ## Komutlar
 
-Proje kökünde çalıştırın:
-
 ```powershell
-wails dev
-
 Set-Location frontend
+npm.cmd ci
+npm.cmd test
 npm.cmd run build
-
 Set-Location ..
+wails generate module
+go test ./...
 wails build
 ```
 
-Bağımlılık değişirse `frontend` içinde `npm install` çalıştırın ve `package-lock.json` dosyasını güncelleyin.
-
-## Tarif veri biçimi
-
-`tarifler/tarifler.json`, benzersiz ve pozitif `id` değerli tariflerden oluşan bir JSON dizisidir:
-
-```json
-[
-  {
-    "id": 1,
-    "ad": "Tarif adı",
-    "emoji": "🍲",
-    "aciklama": "Kısa açıklama",
-    "sure": "30 dakika",
-    "zorluk": "Kolay",
-    "kategori": "Ana Yemekler",
-    "malzemeler": ["1 örnek malzeme"],
-    "adimlar": [
-      { "baslik": "Adım", "aciklama": "Açıklama", "emoji": "🥄", "animasyon": "karistirma", "bekleme": "5 dk" }
-    ],
-    "ingilizce": {
-      "ad": "Recipe name",
-      "aciklama": "Short English description",
-      "malzemeler": ["1 sample ingredient"],
-      "adimlar": [
-        { "baslik": "Step", "aciklama": "Description", "emoji": "🥄", "animasyon": "karistirma", "bekleme": "5 min" }
-      ]
-    }
-  }
-]
-```
-
-- Zorunlu alanlar: `id`, `ad`, `emoji`, `sure`, `zorluk`, en az bir malzeme ve adım.
-- Her adımda `baslik` ve `aciklama` gerekir.
-- Her tarifte eksiksiz `ingilizce` bölümü olmalıdır; aksi halde İngilizce görünümde Türkçe içerik kalır.
-- İngilizce adımlarda `emoji` ve `animasyon` ana tarifle aynı olmalı; süreler `min` veya `hours` ile yazılmalıdır.
-- Yeni `animasyon` için `App.tsx` içindeki `varsayilanBekleme` ve CSS eşlemelerini güncelleyin.
-- Kategori ekleme/değiştirme, `KategoriFiltresi`, kategori seçenekleri ve `tarifKategorisi` ile birlikte yapılır.
-
-## Uygulama kuralları
-
-- Türkçe metinlerde UTF-8 ve `tr-TR` karşılaştırmalarını koruyun.
-- Tüm yeni kullanıcı metinlerini Türkçe ve İngilizce ekleyin.
-- Dil tercihi `localStorage` içindeki `uygulama-dili` anahtarında tutulur.
-- Seçili tarifi özgün veri olarak saklayın; ekranda `goruntulenecekTarif` ile seçili dile göre gösterin.
-- Zorluk görünümü: `Kolay/Orta/Zor` ve `Easy/Medium/Hard`; filtre değerleri Türkçe kalır.
-- Popüler aramalar: `Makarna/Çorba/Tatlı/Tavuk` ve `Pasta/Soup/Dessert/Chicken`.
-- Erişilebilir düğmeler, `aria-label`, klavye kullanımı ve yeterli kontrast sağlayın.
-- Yeni görselleri `frontend/src/assets/` altında, modül importuyla kullanın.
-- Go–frontend köprüsü değişirse Wails bağlarını yeniden üretin. Tariflerin dağıtım paketindeki `tarifler` klasöründe kaldığından emin olun.
+Go–frontend köprüsü değiştiğinde Wails bağlarını yeniden üretin. `frontend/wailsjs` ve `frontend/dist` dosyalarını elle düzenlemeyin.
 
 ## Teslim öncesi
 
-1. İlgili `go test ./...` ve/veya `npm.cmd run build` komutunu çalıştırın.
-2. Tariflerde ID, zorunlu alanlar, İngilizce bölüm, kategori ve animasyon eşlemelerini kontrol edin.
-3. Üretilmiş dosyalarda veya ilgisiz kullanıcı dosyalarında değişiklik bırakmayın.
+1. Katalogdaki her senaryo dosyasının bulunduğunu ve kimliklerin benzersiz olduğunu kontrol edin.
+2. Bütün Lua tariflerini varsayılan cevap sürücüsüyle `success()` sonucuna kadar test edin.
+3. İptal, eksik malzeme, sayaç kapatma, `for` ve `while` yollarını ilgili testlerde doğrulayın.
+4. `go test ./...`, `npm.cmd run build` ve `wails build` çalıştırın.

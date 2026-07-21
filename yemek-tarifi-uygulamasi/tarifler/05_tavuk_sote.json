@@ -1,0 +1,13 @@
+{
+  "id": 5,
+  "ad": "Tavuk Sote",
+  "emoji": "🍗",
+  "aciklama": "Porsiyona göre hesaplanan kontrollü tavuk sote.",
+  "sure": "35 dakika",
+  "zorluk": "Kolay",
+  "kategori": "Ana Yemekler",
+  "ingilizce": {
+    "ad": "Chicken Sauté",
+    "aciklama": "Portion-aware chicken sauté with doneness checks."
+  }
+}

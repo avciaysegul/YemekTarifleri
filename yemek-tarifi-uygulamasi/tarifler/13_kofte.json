@@ -1,0 +1,13 @@
+{
+  "id": 13,
+  "ad": "Izgara Köfte",
+  "emoji": "🍖",
+  "aciklama": "Boyut ve pişme tercihine göre köfte.",
+  "sure": "35 dakika",
+  "zorluk": "Orta",
+  "kategori": "Ana Yemekler",
+  "ingilizce": {
+    "ad": "Grilled Meatballs",
+    "aciklama": "Meatballs adapted to size and doneness preference."
+  }
+}

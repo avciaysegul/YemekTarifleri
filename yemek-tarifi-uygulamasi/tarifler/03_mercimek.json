@@ -1,0 +1,13 @@
+{
+  "id": 3,
+  "ad": "Mercimek Çorbası",
+  "emoji": "🥣",
+  "aciklama": "Kıvamı size göre ayarlanan mercimek çorbası.",
+  "sure": "40 dakika",
+  "zorluk": "Orta",
+  "kategori": "Ana Yemekler",
+  "ingilizce": {
+    "ad": "Lentil Soup",
+    "aciklama": "Lentil soup adjusted to your preferred consistency."
+  }
+}

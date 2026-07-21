@@ -1,0 +1,13 @@
+{
+  "id": 10,
+  "ad": "Yumuşacık Pankek",
+  "emoji": "🥞",
+  "aciklama": "İstenen adet ve boyuta göre pankek.",
+  "sure": "20 dakika",
+  "zorluk": "Kolay",
+  "kategori": "Tatlılar",
+  "ingilizce": {
+    "ad": "Fluffy Pancakes",
+    "aciklama": "Pancakes calculated for your chosen count and size."
+  }
+}

@@ -1,394 +1,125 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { TarifAkisiniCalistir, TarifleriGetir } from "../wailsjs/go/main/App";
-import heroGorseli from "./assets/images/mutfak-food-hero-v2.png";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { SenaryoBaslat, SenaryoCevapla, SenaryoIptal, TarifleriGetir } from "../wailsjs/go/main/App";
+import hero from "./assets/images/mutfak-food-hero-v2.png";
 import "./App.css";
 
-interface TarifAdimi {
-  baslik: string;
-  aciklama: string;
-  emoji: string;
-  animasyon: string;
-  bekleme?: string;
-}
+export type Dil = "tr" | "en";
+type Sayfa = "home" | "about" | "privacy";
+type Ceviri = { ad: string; aciklama: string };
+export type Tarif = { id: number; ad: string; emoji: string; aciklama: string; sure: string; zorluk: string; kategori: string; senaryo: string; ingilizce: Ceviri };
+type Secenek = { value: string; label: string; visualKey?: string };
+type Komut = { tur: string; baslik: string; mesaj: string; visualKey?: string; onayMetni?: string; iptalMetni?: string; varsayilan?: number; minimum?: number; maksimum?: number; sure?: number; secenekler?: Secenek[]; ogeler?: string[] };
+type Guncelleme = { oturumId: string; istekId?: string; durum: "waiting" | "success" | "fail"; ilerleme: number; ilerlemeMesaji?: string; komut?: Komut };
+type Cevap = { sayi?: number; metin?: string; onay?: boolean; eylem?: string; iptal?: boolean };
 
-interface YemekTarifi {
-  id: number;
-  ad: string;
-  emoji: string;
-  aciklama: string;
-  sure: string;
-  zorluk: string;
-  kategori?: string;
-  malzemeler: string[];
-  adimlar: TarifAdimi[];
-  ingilizce?: {
-    ad: string;
-    aciklama: string;
-    malzemeler: string[];
-    adimlar: TarifAdimi[];
-  };
-}
+const metin = {
+  tr: { title: "Mutfakta Bugün", lead: "Seçimlerinize uyum sağlayan tariflerle mutfakta adım adım ilerleyin.", eyebrow: "AKILLI TARİF REHBERİ", search: "Tarif ara", searchLabel: "Tariflerde ara", start: "Tarife başla", dynamic: "Miktarlar ve süreler seçimlerinize göre hesaplanır.", back: "Tarifi kapat", cancel: "İptal", yes: "Evet", no: "Hayır", ok: "Tamam", save: "Kaydet", timerStart: "Başlat", pause: "Duraklat", resume: "Devam et", close: "Sayacı kapat", loading: "Tarifler yükleniyor…", error: "Bir hata oluştu", exit: "Çalışan tarif iptal edilecek. Çıkılsın mı?", progress: "Tarif ilerlemesi", recipes: "Tarifleri keşfet", all: "Tümü", noResults: "Aradığınız tarifi bulamadık", noResultsText: "Aramanızı değiştirin veya tüm kategorileri yeniden gösterin.", clear: "Aramayı temizle", home: "Tarifler", about: "Hakkında", privacy: "Kişisel Veriler", contact: "İletişim", waiting: "Sıradaki adım", success: "Tarif tamamlandı", fail: "Tarif sonlandırıldı", numberLabel: "Değerinizi girin" },
+  en: { title: "In the Kitchen Today", lead: "Cook step by step with recipes that adapt to your choices.", eyebrow: "SMART COOKING GUIDE", search: "Search recipes", searchLabel: "Search recipes", start: "Start recipe", dynamic: "Quantities and timings are calculated from your choices.", back: "Close recipe", cancel: "Cancel", yes: "Yes", no: "No", ok: "OK", save: "Save", timerStart: "Start", pause: "Pause", resume: "Resume", close: "Close timer", loading: "Loading recipes…", error: "Something went wrong", exit: "The running recipe will be cancelled. Exit?", progress: "Recipe progress", recipes: "Explore recipes", all: "All", noResults: "We couldn't find that recipe", noResultsText: "Try another search or show all categories again.", clear: "Clear search", home: "Recipes", about: "About", privacy: "Personal Data", contact: "Contact", waiting: "Next step", success: "Recipe completed", fail: "Recipe ended", numberLabel: "Enter your value" }
+};
 
-interface LuaTarifDurumu {
-  aktifAdim: number;
-  ilerleme: number;
-  tamamlandi: boolean;
-  bekleme: string;
-  oncekiAdimVar: boolean;
-  ileriTamamlar: boolean;
-}
-
-type Ekran = "anaSayfa" | "hakkimizda" | "iletisim" | "detay" | "tarif" | "tamamlandi";
-type Dil = "tr" | "en";
-type ZorlukFiltresi = "Tümü" | "Kolay" | "Orta" | "Zor";
-type KategoriFiltresi = "Tümü" | "Ana Yemekler" | "Tatlılar" | "İçecekler";
-
-const zorluklar: ZorlukFiltresi[] = ["Tümü", "Kolay", "Orta", "Zor"];
-const kategoriler: KategoriFiltresi[] = ["Tümü", "Ana Yemekler", "Tatlılar", "İçecekler"];
-
-const metinler = {
-  tr: {
-    recipes: "Tarifler", about: "Hakkımızda", contact: "Bize ulaşın", settings: "Ayarlar", language: "Dil", turkish: "Türkçe", english: "English",
-    contactShort: "İletişim", dailyGuide: "GÜNLÜK MUTFAK REHBERİ", heroTitle: <>Kolay ve pratik<br />yemek tarifleri</>,
-    heroText: "Ölçüsü net, adımları anlaşılır tariflerle mutfakta her gün yeni bir lezzet keşfedin.", searchPlaceholder: "Tarif veya malzeme ara", search: "Tarif ara", popular: "Popüler:",
-    filter: "Sonuçları filtreleyin", results: "tarif bulundu", step: "adım", viewRecipe: "Tarifi gör", noRecipe: "Tarif bulunamadı", noRecipeText: "Arama ifadenizi veya filtrenizi değiştirin.",
-    loading: "Tarifler hazırlanıyor…", errorTitle: "Bir hata oluştu", retry: "Tekrar dene", loadError: "Tarifler yüklenemedi. Lütfen uygulamayı yeniden deneyin.",
-    backRecipes: "← Tariflere dön", recipe: "YEMEK TARİFİ", ingredients: "Malzemeler", ready: "hazır", start: "▶ Tarife başla", finishedText: "Eline sağlık, bütün adımları tamamladın.", repeat: "Tarifi tekrarla", chooseAnother: "Başka tarif seç",
-    recipeInfo: "← Tarif bilgileri", waiting: "Bekleme süresi", previous: "← Önceki", complete: "Tarifi tamamla", next: "Sonraki adım →", progress: "İlerleme",
-  },
-  en: {
-    recipes: "Recipes", about: "About", contact: "Contact us", settings: "Settings", language: "Language", turkish: "Türkçe", english: "English",
-    contactShort: "Contact", dailyGuide: "EVERYDAY KITCHEN GUIDE", heroTitle: <>Easy, practical<br />recipes</>,
-    heroText: "Discover a new flavour every day with clearly measured recipes and easy-to-follow steps.", searchPlaceholder: "Search recipes or ingredients", search: "Search", popular: "Popular:",
-    filter: "Filter results", results: "recipes found", step: "steps", viewRecipe: "View recipe", noRecipe: "No recipes found", noRecipeText: "Try changing your search or filter.",
-    loading: "Preparing recipes…", errorTitle: "Something went wrong", retry: "Try again", loadError: "Recipes could not be loaded. Please try again.",
-    backRecipes: "← Back to recipes", recipe: "RECIPE", ingredients: "Ingredients", ready: "ready", start: "▶ Start cooking", finishedText: "Well done, you completed every step.", repeat: "Cook again", chooseAnother: "Choose another recipe",
-    recipeInfo: "← Recipe details", waiting: "Waiting time", previous: "← Previous", complete: "Complete recipe", next: "Next step →", progress: "Progress",
-  },
-} as const;
+const kategoriCeviri: Record<string, string> = { "Ana Yemekler": "Main dishes", "Tatlılar": "Desserts", "İçecekler": "Drinks" };
+const zorlukCeviri: Record<string, string> = { Kolay: "Easy", Orta: "Medium", Zor: "Hard" };
+export const kategoriMetni = (kategori: string, dil: Dil) => dil === "en" ? kategoriCeviri[kategori] ?? kategori : kategori;
+export const zorlukMetni = (zorluk: string, dil: Dil) => dil === "en" ? zorlukCeviri[zorluk] ?? zorluk : zorluk;
+export const sureMetni = (sure: string, dil: Dil) => dil === "en" ? sure.replace(/\s*dakika$/i, " min") : sure;
 
 function App() {
   const [dil, setDil] = useState<Dil>(() => localStorage.getItem("uygulama-dili") === "en" ? "en" : "tr");
-  const [ayarlarAcik, setAyarlarAcik] = useState(false);
-  const [tarifler, setTarifler] = useState<YemekTarifi[]>([]);
-  const [seciliTarif, setSeciliTarif] = useState<YemekTarifi | null>(null);
-  const [aktifAdim, setAktifAdim] = useState(0);
-  const [luaBekleme, setLuaBekleme] = useState("");
-  const [luaIlerleme, setLuaIlerleme] = useState(0);
-  const [oncekiAdimVar, setOncekiAdimVar] = useState(false);
-  const [ileriTamamlar, setIleriTamamlar] = useState(false);
-  const [ekran, setEkran] = useState<Ekran>("anaSayfa");
+  const [sayfa, setSayfa] = useState<Sayfa>("home");
+  const [tarifler, setTarifler] = useState<Tarif[]>([]);
   const [arama, setArama] = useState("");
-  const [zorluk, setZorluk] = useState<ZorlukFiltresi>("Tümü");
-  const [kategori, setKategori] = useState<KategoriFiltresi>("Tümü");
-  const [tamamlananMalzemeler, setTamamlananMalzemeler] = useState<string[]>([]);
-  const [yukleniyor, setYukleniyor] = useState(true);
+  const [kategori, setKategori] = useState("all");
+  const [secili, setSecili] = useState<Tarif | null>(null);
+  const [guncelleme, setGuncelleme] = useState<Guncelleme | null>(null);
   const [hata, setHata] = useState("");
-  const t = metinler[dil];
+  const [yukleniyor, setYukleniyor] = useState(true);
+  const t = metin[dil];
 
-  function goruntulenecekTarif(tarif: YemekTarifi): YemekTarifi {
-    if (dil !== "en" || !tarif.ingilizce) return tarif;
-    return { ...tarif, ...tarif.ingilizce };
-  }
+  useEffect(() => { TarifleriGetir().then(x => setTarifler(x as unknown as Tarif[])).catch(e => setHata(String(e))).finally(() => setYukleniyor(false)); }, []);
+  useEffect(() => { localStorage.setItem("uygulama-dili", dil); document.documentElement.lang = dil; }, [dil]);
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "auto" }); }, [secili, sayfa]);
 
-  function zorluguGoster(zorlukDegeri: YemekTarifi["zorluk"]) {
-    if (dil !== "en") return zorlukDegeri;
-    return ({ Kolay: "Easy", Orta: "Medium", Zor: "Hard" } as Record<string, string>)[zorlukDegeri] || zorlukDegeri;
-  }
+  const kategoriler = useMemo(() => Array.from(new Set(tarifler.map(r => r.kategori))), [tarifler]);
+  const liste = useMemo(() => tarifler.filter(r => {
+    const x = dil === "en" ? r.ingilizce : r;
+    const metinAlani = `${x.ad} ${x.aciklama} ${kategoriMetni(r.kategori, dil)} ${zorlukMetni(r.zorluk, dil)}`;
+    const eslesiyor = metinAlani.toLocaleLowerCase(dil === "en" ? "en-US" : "tr-TR").includes(arama.trim().toLocaleLowerCase(dil === "en" ? "en-US" : "tr-TR"));
+    return eslesiyor && (kategori === "all" || r.kategori === kategori);
+  }), [tarifler, arama, kategori, dil]);
 
-  function zorlukFiltresiniGoster(zorlukDegeri: ZorlukFiltresi) {
-    if (dil !== "en") return zorlukDegeri;
-    return ({ "Tümü": "All", Kolay: "Easy", Orta: "Medium", Zor: "Hard" } as Record<ZorlukFiltresi, string>)[zorlukDegeri];
-  }
+  async function baslat(r: Tarif) { try { setHata(""); setSecili(r); setGuncelleme(await SenaryoBaslat(r.id, dil) as unknown as Guncelleme); } catch (e) { setSecili(null); setHata(String(e)); } }
+  async function cevapla(c: Cevap) { if (!guncelleme?.istekId) return; try { setGuncelleme(await SenaryoCevapla(guncelleme.oturumId, guncelleme.istekId, c as never) as unknown as Guncelleme); } catch (e) { setHata(String(e)); } }
+  async function kapat() { if (guncelleme?.durum === "waiting" && !window.confirm(t.exit)) return; try { if (guncelleme?.oturumId) await SenaryoIptal(guncelleme.oturumId); } finally { setGuncelleme(null); setSecili(null); } }
+  function anaSayfayaDon() { setSayfa("home"); setArama(""); setKategori("all"); }
 
-  useEffect(() => {
-    void tarifleriYukle();
-  }, []);
+  if (yukleniyor) return <Durum text={t.loading} />;
+  if (secili && guncelleme) return <SenaryoEkrani tarif={secili} dil={dil} g={guncelleme} cevapla={cevapla} kapat={kapat} />;
 
-  useEffect(() => {
-    localStorage.setItem("uygulama-dili", dil);
-    document.documentElement.lang = dil;
-  }, [dil]);
+  return <main className="uygulama">
+    <header className="site-baslik">
+      <button className="marka" type="button" onClick={anaSayfayaDon} aria-label={t.home}><span>Mutfakta</span><strong>Bugün</strong></button>
+      <nav className="ust-menu" aria-label={dil === "en" ? "Main navigation" : "Ana menü"}>
+        <button className={sayfa === "home" ? "aktif" : ""} onClick={() => setSayfa("home")}>{t.home}</button>
+        <button className={sayfa === "about" ? "aktif" : ""} onClick={() => setSayfa("about")}>{t.about}</button>
+        <button className={sayfa === "privacy" ? "aktif" : ""} onClick={() => setSayfa("privacy")}>{t.privacy}</button>
+      </nav>
+      <div className="dil-secici" aria-label={dil === "en" ? "Language" : "Dil"}>
+        <button type="button" aria-pressed={dil === "tr"} className={dil === "tr" ? "aktif" : ""} onClick={() => setDil("tr")}>TR</button>
+        <button type="button" aria-pressed={dil === "en"} className={dil === "en" ? "aktif" : ""} onClick={() => setDil("en")}>EN</button>
+      </div>
+    </header>
 
-  const filtrelenmisTarifler = useMemo(() => {
-    const aramaMetni = arama.trim().toLocaleLowerCase("tr-TR");
-
-    return tarifler.filter((tarif) => {
-      const gorunenTarif = goruntulenecekTarif(tarif);
-      const aramaEslesiyor =
-        !aramaMetni ||
-        `${gorunenTarif.ad} ${gorunenTarif.aciklama} ${gorunenTarif.malzemeler.join(" ")}`
-          .toLocaleLowerCase("tr-TR")
-          .includes(aramaMetni);
-      const zorlukEslesiyor = zorluk === "Tümü" || tarif.zorluk === zorluk;
-      const kategoriEslesiyor = kategori === "Tümü" || tarifKategorisi(tarif) === kategori;
-
-      return aramaEslesiyor && zorlukEslesiyor && kategoriEslesiyor;
-    });
-  }, [arama, tarifler, zorluk, kategori]);
-
-  async function tarifleriYukle() {
-    try {
-      setYukleniyor(true);
-      setHata("");
-      setTarifler((await TarifleriGetir()) as YemekTarifi[]);
-    } catch (yakalananHata) {
-      console.error(yakalananHata);
-      setHata(t.loadError);
-    } finally {
-      setYukleniyor(false);
-    }
-  }
-
-  function tarifDetayiniAc(tarif: YemekTarifi) {
-    setSeciliTarif(tarif);
-    setAktifAdim(0);
-    setLuaBekleme("");
-    setLuaIlerleme(0);
-    setOncekiAdimVar(false);
-    setIleriTamamlar(false);
-    setTamamlananMalzemeler([]);
-    setEkran("detay");
-  }
-
-  function anaSayfayaDon() {
-    setSeciliTarif(null);
-    setAktifAdim(0);
-    setLuaBekleme("");
-    setLuaIlerleme(0);
-    setOncekiAdimVar(false);
-    setIleriTamamlar(false);
-    setTamamlananMalzemeler([]);
-    setEkran("anaSayfa");
-  }
-
-  function malzemeyiDegistir(malzeme: string) {
-    setTamamlananMalzemeler((onceki) =>
-      onceki.includes(malzeme)
-        ? onceki.filter((deger) => deger !== malzeme)
-        : [...onceki, malzeme]
-    );
-  }
-
-  async function luaTarifKomutu(komut: "baslat" | "ileri" | "geri") {
-    if (!seciliTarif) return;
-    const gorunenTarif = goruntulenecekTarif(seciliTarif);
-    const mevcut = gorunenTarif.adimlar[aktifAdim];
-
-    try {
-      const durum = await TarifAkisiniCalistir(
-        seciliTarif.id,
-        gorunenTarif.adimlar.length,
-        aktifAdim,
-        komut,
-        mevcut?.animasyon || "",
-        mevcut?.bekleme || "",
-      ) as unknown as LuaTarifDurumu;
-      setAktifAdim(durum.aktifAdim);
-      setLuaBekleme(durum.bekleme);
-      setLuaIlerleme(durum.ilerleme);
-      setOncekiAdimVar(durum.oncekiAdimVar);
-      setIleriTamamlar(durum.ileriTamamlar);
-      if (durum.tamamlandi) setEkran("tamamlandi");
-    } catch (yakalananHata) {
-      console.error(yakalananHata);
-      setHata(t.loadError);
-    }
-  }
-
-  if (yukleniyor) {
-    return <DurumEkrani emoji="🍲" baslik={t.loading} yukleniyor />;
-  }
-
-  if (hata) {
-    return (
-      <DurumEkrani emoji="⚠️" baslik={t.errorTitle} metin={hata}>
-        <button className="ana-buton" onClick={() => void tarifleriYukle()}>
-          {t.retry}
-        </button>
-      </DurumEkrani>
-    );
-  }
-
-  if (ekran === "anaSayfa") {
-    return (
-      <main className="uygulama">
-        <header className="site-baslik">
-          <button className="marka" onClick={anaSayfayaDon}><span>Mutfakta</span><strong>Bugün</strong></button>
-          <nav className="ust-menu" aria-label="Ana menü"><a href="#tarifler">{t.recipes}</a><button onClick={() => setEkran("hakkimizda")}>{t.about}</button><button onClick={() => setEkran("iletisim")}>{t.contact}</button></nav>
-          <div className="ust-islemler"><button className="ayarlar-buton" onClick={() => setAyarlarAcik((onceki) => !onceki)} aria-expanded={ayarlarAcik}>⚙ {t.settings}</button>{ayarlarAcik && <div className="dil-paneli"><span>{t.language}</span><button className={dil === "tr" ? "aktif" : ""} onClick={() => { setDil("tr"); setAyarlarAcik(false); }}>{t.turkish}</button><button className={dil === "en" ? "aktif" : ""} onClick={() => { setDil("en"); setAyarlarAcik(false); }}>{t.english}</button></div>}<button className="profil-buton" onClick={() => setEkran("iletisim")} aria-label={t.contact}><span>✉</span><b>{t.contactShort}</b></button></div>
-        </header>
-
-        <section className="hero-alani" style={{ backgroundImage: `linear-gradient(90deg, rgba(8, 10, 13, .9), rgba(8, 10, 13, .42)), url(${heroGorseli})` }}>
-          <div className="hero-icerik"><span className="hero-etiket">{t.dailyGuide}</span><h1>{t.heroTitle}</h1><p>{t.heroText}</p>
-            <div className="hero-arama"><label><span>⌕</span><input value={arama} onChange={(olay) => setArama(olay.target.value)} placeholder={t.searchPlaceholder} aria-label={t.searchPlaceholder} /></label><button>{t.search}</button></div>
-            <div className="populer-aramalar"><b>{t.popular}</b><button onClick={() => setArama(dil === "en" ? "pasta" : "makarna")}>{dil === "en" ? "Pasta" : "Makarna"}</button><button onClick={() => setArama(dil === "en" ? "soup" : "çorba")}>{dil === "en" ? "Soup" : "Çorba"}</button><button onClick={() => setArama(dil === "en" ? "cake" : "tatlı")}>{dil === "en" ? "Dessert" : "Tatlı"}</button><button onClick={() => setArama(dil === "en" ? "chicken" : "tavuk")}>{dil === "en" ? "Chicken" : "Tavuk"}</button></div>
-          </div>
-        </section>
-
-        <section className="tarif-bolumu" id="tarifler" aria-label="Tarifler">
-          <div className="kesfet-araclari">
-            <span className="filtre-baslik">{t.filter}</span>
-            <div className="filtreler" aria-label="Zorluk filtresi">
-              {zorluklar.map((secenek) => (
-                <button
-                  className={zorluk === secenek ? "filtre aktif" : "filtre"}
-                  key={secenek}
-                  onClick={() => setZorluk(secenek)}
-                >
-                  {zorlukFiltresiniGoster(secenek)}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="bolum-basligi">
-            <h2>{t.recipes}</h2>
-            <span>{filtrelenmisTarifler.length} {t.results}</span>
-          </div>
-
-          {filtrelenmisTarifler.length ? (
-            <div className="tarif-listesi">{filtrelenmisTarifler.map((tarif) => {
-              const gorunenTarif = goruntulenecekTarif(tarif);
-              return <article className="tarif-karti" key={tarif.id}>
-                  <div className="kart-emoji">{gorunenTarif.emoji}</div>
-                  <div className="kart-icerigi">
-                    <h3>{gorunenTarif.ad}</h3>
-                    <p>{gorunenTarif.aciklama}</p>
-                    <div className="tarif-bilgileri">
-                      <span>⏱ {sureyiGoster(gorunenTarif.sure, dil)}</span>
-                      <span>📊 {zorluguGoster(gorunenTarif.zorluk)}</span>
-                      <span>📝 {gorunenTarif.adimlar.length} {t.step}</span>
-                    </div>
-                    <button className="ana-buton" onClick={() => tarifDetayiniAc(tarif)}>
-                      {t.viewRecipe} <span aria-hidden="true">→</span>
-                    </button>
-                  </div>
-                </article>;
-            })}</div>
-          ) : (
-            <div className="bos-durum"><span>🔎</span><h2>{t.noRecipe}</h2><p>{t.noRecipeText}</p></div>
-          )}
-        </section>
-      </main>
-    );
-  }
-
-  if (ekran === "hakkimizda") return <HakkimizdaSayfasi geriDon={() => setEkran("anaSayfa")} dil={dil} />;
-  if (ekran === "iletisim") return <IletisimSayfasi geriDon={() => setEkran("anaSayfa")} dil={dil} />;
-
-  if (!seciliTarif) return null;
-
-  if (ekran === "detay") {
-    const gosterilenTarif = goruntulenecekTarif(seciliTarif);
-    const malzemeSayisi = gosterilenTarif.malzemeler.length;
-    return (
-      <main className="uygulama">
-        <button className="geri-buton" onClick={anaSayfayaDon}>{t.backRecipes}</button>
-        <section className="detay-karti">
-          <div className="detay-ust">
-            <div className="detay-emoji">{gosterilenTarif.emoji}</div>
-            <div><span className="ust-etiket">{t.recipe}</span><h1>{gosterilenTarif.ad}</h1><p>{gosterilenTarif.aciklama}</p>
-              <div className="detay-bilgileri"><span>⏱ {sureyiGoster(gosterilenTarif.sure, dil)}</span><span>📊 {zorluguGoster(gosterilenTarif.zorluk)}</span><span>📝 {gosterilenTarif.adimlar.length} {t.step}</span></div>
-            </div>
-          </div>
-          <div className="malzeme-alani">
-            <div className="malzeme-baslik"><h2>{t.ingredients}</h2><span>{tamamlananMalzemeler.length}/{malzemeSayisi} {t.ready}</span></div>
-            <ul className="malzeme-listesi">
-              {gosterilenTarif.malzemeler.map((malzeme, indeks) => {
-                const tamamlandi = tamamlananMalzemeler.includes(malzeme);
-                const { olcu, ad } = malzemeyiParcala(malzeme);
-                return <li key={`${malzeme}-${indeks}`} className={tamamlandi ? "hazir" : ""}>
-                  <label><input type="checkbox" checked={tamamlandi} onChange={() => malzemeyiDegistir(malzeme)} /><span className="onay-isareti" aria-hidden="true">✓</span><span className="malzeme-metni">{olcu && <strong className="malzeme-olcusu">{olcu}</strong>}{ad}</span></label>
-                </li>;
-              })}
-            </ul>
-          </div>
-          <button className="basla-buton" onClick={() => void luaTarifKomutu("baslat").then(() => setEkran("tarif"))}>{t.start}</button>
-        </section>
-      </main>
-    );
-  }
-
-  if (ekran === "tamamlandi") {
-    const gosterilenTarif = goruntulenecekTarif(seciliTarif);
-    return <DurumEkrani emoji={gosterilenTarif.emoji} baslik={`${gosterilenTarif.ad} ${dil === "en" ? "is ready!" : "hazır!"}`} metin={t.finishedText}>
-      <div className="tamamlandi-butonlari"><button className="ikincil-buton" onClick={() => void luaTarifKomutu("baslat").then(() => setEkran("tarif"))}>{t.repeat}</button><button className="ana-buton" onClick={anaSayfayaDon}>{t.chooseAnother}</button></div>
-    </DurumEkrani>;
-  }
-
-  const gosterilenTarif = goruntulenecekTarif(seciliTarif);
-  const adim = gosterilenTarif.adimlar[aktifAdim];
-  const ilerleme = luaIlerleme;
-  return (
-    <main className="uygulama tarif-ekrani">
-      <header className="tarif-ust-menu"><button className="geri-buton" onClick={() => setEkran("detay")}>{t.recipeInfo}</button><span className="adim-sayisi">{dil === "en" ? "Step" : "Adım"} {aktifAdim + 1} / {gosterilenTarif.adimlar.length}</span></header>
-      <div className="ilerleme-cubugu" aria-label={`${t.progress}: ${Math.round(ilerleme)}%`}><div className="ilerleme" style={{ width: `${ilerleme}%` }} /></div>
-      <section className="adim-karti" key={aktifAdim}>
-        <CookingIllustration tur={adim.animasyon} emoji={adim.emoji} />
-        <span className="ust-etiket">{gosterilenTarif.ad.toLocaleUpperCase(dil === "en" ? "en-US" : "tr-TR")}</span><h1>{adim.baslik}</h1><p>{adim.aciklama}</p>
-        <div className="bekleme-bilgisi" aria-label={`${t.waiting}: ${luaBekleme || adim.bekleme || "2 dk"}`}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>
-          <span>{t.waiting}</span><strong>{luaBekleme || adim.bekleme || "2 dk"}</strong>
+    {hata && <div className="hata-bandi" role="alert">{t.error}: {hata}</div>}
+    {sayfa === "home" && <>
+      <section className="hero-alani" style={{ backgroundImage: `linear-gradient(90deg,rgba(8,10,13,.91),rgba(8,10,13,.36)),url(${hero})` }}>
+        <div className="hero-icerik"><span className="hero-etiket">{t.eyebrow}</span><h1>{t.title}</h1><p>{t.lead}</p>
+          <div className="hero-arama"><label><span aria-hidden="true">⌕</span><span className="sr-only">{t.searchLabel}</span><input value={arama} onChange={e => setArama(e.target.value)} placeholder={t.search} aria-label={t.searchLabel} /></label></div>
         </div>
-        <div className="adim-butonlari"><button className="ikincil-buton" onClick={() => oncekiAdimVar ? void luaTarifKomutu("geri") : setEkran("detay")}>{t.previous}</button><button className="ana-buton" onClick={() => void luaTarifKomutu("ileri")}>{ileriTamamlar ? t.complete : t.next}</button></div>
       </section>
-    </main>
-  );
-}
-
-function sureyiGoster(sure: string, dil: Dil = "tr") {
-  return dil === "en" ? `About ${sure.replace("dakika", "min")}` : `Ortalama ${sure.replace("dakika", "dk")}`;
-}
-
-function tarifKategorisi(tarif: YemekTarifi): Exclude<KategoriFiltresi, "Tümü"> {
-  if (tarif.kategori === "Tatlılar" || tarif.kategori === "İçecekler" || tarif.kategori === "Ana Yemekler") return tarif.kategori;
-  if (["Sütlaç"].includes(tarif.ad)) return "Tatlılar";
-  return "Ana Yemekler";
-}
-
-function malzemeyiParcala(malzeme: string) {
-  const eslesme = malzeme.match(/^((?:\d+(?:[,.]\d+)?|Yarım|yarım|1\/2)(?:\s+(?:adet|paket|litre|ml|g|dal|demet|küp|su bardağı|çay bardağı|yemek kaşığı|tatlı kaşığı|çay kaşığı))?(?:\s+(?:orta boy|büyük|küçük))?)\s+(.+)$/u);
-  return eslesme ? { olcu: eslesme[1], ad: eslesme[2] } : { olcu: "Ölçüsü tarifte belirtilmiştir", ad: malzeme };
-}
-
-function CookingIllustration({ tur, emoji }: { tur: string; emoji: string }) {
-  return <div className={`adim-animasyonu svg-animasyon ${tur}`} aria-label="Tarif adımı animasyonu">
-    <svg viewBox="0 0 240 240" role="img" aria-hidden="true">
-      <defs><linearGradient id="pot" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#f38b57"/><stop offset="1" stopColor="#cb472f"/></linearGradient></defs>
-      <circle cx="120" cy="120" r="108" fill="#fff3d5"/>
-      <path className="buhar buhar-bir" d="M88 89c-10-12 9-20 0-33"/><path className="buhar buhar-iki" d="M120 83c-10-12 9-20 0-33"/><path className="buhar buhar-uc" d="M152 89c-10-12 9-20 0-33"/>
-      <path className="tencere-kulpu" d="M54 127h24M162 127h24"/><path className="tencere" d="M72 111h96l-9 58H81z" fill="url(#pot)"/><ellipse cx="120" cy="111" rx="48" ry="13" fill="#733426"/>
-      <g className="kasik"><path d="M153 55l-27 61"/><ellipse cx="158" cy="47" rx="12" ry="18" fill="#e7bb75"/></g>
-      <text x="120" y="151" textAnchor="middle" className="svg-emoji">{emoji}</text>
-      <circle className="kabarcik kabarcik-bir" cx="98" cy="103" r="5"/><circle className="kabarcik kabarcik-iki" cx="139" cy="105" r="4"/>
-    </svg>
-  </div>;
-}
-
-function LoadingSvg() {
-  return <svg viewBox="0 0 120 120" aria-label="Yükleniyor"><circle className="yukleme-halka" cx="60" cy="60" r="42"/><path className="yukleme-cizgi" d="M60 30v30l20 12"/><circle cx="60" cy="60" r="4"/></svg>;
-}
-
-function HakkimizdaSayfasi({ geriDon, dil }: { geriDon: () => void; dil: Dil }) {
-  const ingilizce = dil === "en";
-  return <main className="uygulama bilgi-sayfasi">
-    <button className="geri-buton" onClick={geriDon}>{ingilizce ? "← Back to recipes" : "← Tariflere dön"}</button>
-    <header className="bilgi-kahraman"><span className="ust-etiket">MUTFAKTA BUGÜN</span><h1>{ingilizce ? "A little guide to keep you company in the kitchen." : "Mutfağa eşlik eden küçük bir rehber."}</h1><p>{ingilizce ? "We are here for clear measurements, practical recipes and an enjoyable cooking experience." : "Net ölçüler, pratik tarifler ve keyifli bir pişirme deneyimi için buradayız."}</p></header>
-    <section className="tek-bilgi-karti"><article className="hakkimizda-karti"><div className="bilgi-ikon">♥</div><span className="ust-etiket">{ingilizce ? "ABOUT" : "HAKKIMIZDA"}</span><h2>{ingilizce ? "We make recipes simpler." : "Tarifleri sadeleştiriyoruz."}</h2><p>{ingilizce ? "We provide every recipe with measured ingredients and waiting times for each step, so you can always follow along with confidence." : "Her tarifin malzemesini ölçüsüyle, adımlarını bekleme süresiyle sunuyoruz. Böylece mutfakta ne yapacağınızı her zaman kolayca takip edebilirsiniz."}</p><div className="degerler"><span>✓ {ingilizce ? "Clear measurements" : "Net ölçüler"}</span><span>✓ {ingilizce ? "Step-by-step guidance" : "Adım adım anlatım"}</span><span>✓ {ingilizce ? "For every skill level" : "Her seviyeye uygun"}</span></div></article></section>
+      <section className="tarif-bolumu" aria-labelledby="tarif-basligi">
+        <div className="bolum-basligi"><div><span className="bolum-kicker">{dil === "en" ? "CHOOSE YOUR NEXT MEAL" : "SIRADAKİ LEZZETİNİ SEÇ"}</span><h2 id="tarif-basligi">{t.recipes}</h2></div><span aria-label={`${liste.length} ${dil === "en" ? "recipes" : "tarif"}`}>{liste.length}</span></div>
+        <div className="kategori-filtreleri" aria-label={dil === "en" ? "Recipe categories" : "Tarif kategorileri"}>
+          <button aria-pressed={kategori === "all"} className={kategori === "all" ? "kategori aktif" : "kategori"} onClick={() => setKategori("all")}>{t.all}</button>
+          {kategoriler.map(k => <button key={k} aria-pressed={kategori === k} className={kategori === k ? "kategori aktif" : "kategori"} onClick={() => setKategori(k)}>{kategoriMetni(k, dil)}</button>)}
+        </div>
+        {liste.length ? <div className="tarif-listesi">{liste.map(r => <TarifKarti key={r.id} tarif={r} dil={dil} baslat={baslat} />)}</div> : <div className="bos-durum" role="status"><AnimatedBowl /><h2>{t.noResults}</h2><p>{t.noResultsText}</p><button className="ana-buton" onClick={() => { setArama(""); setKategori("all"); }}>{t.clear}</button></div>}
+      </section>
+      <InfoStrip dil={dil} sayfaAc={setSayfa} />
+    </>}
+    {sayfa === "about" && <AboutPage dil={dil} />}
+    {sayfa === "privacy" && <PrivacyPage dil={dil} />}
   </main>;
 }
 
-function IletisimSayfasi({ geriDon, dil }: { geriDon: () => void; dil: Dil }) {
-  const ingilizce = dil === "en";
-  return <main className="uygulama bilgi-sayfasi">
-    <button className="geri-buton" onClick={geriDon}>{ingilizce ? "← Back to recipes" : "← Tariflere dön"}</button>
-    <header className="bilgi-kahraman"><span className="ust-etiket">{ingilizce ? "CONTACT US" : "BİZE ULAŞIN"}</span><h1>{ingilizce ? "Need a hand while following a recipe?" : "Tarif sırasında takıldığınız bir nokta mı var?"}</h1><p>{ingilizce ? "Write to us whenever you need help with ingredient measures, cooking times or using the app." : "Malzeme ölçüleri, pişirme süresi veya uygulamanın kullanımıyla ilgili desteğe ihtiyacınız olduğunda bize yazın; size yardımcı olalım."}</p></header>
-    <section className="tek-bilgi-karti"><article className="iletisim-sayfa-karti"><div className="bilgi-ikon">✉</div><span className="ust-etiket">{ingilizce ? "CONTACT" : "İLETİŞİM"}</span><h2>{ingilizce ? "Share your ideas with us." : "Fikirlerinizi bizimle paylaşın."}</h2><p>{ingilizce ? "You can email us recipe suggestions, content collaborations and app improvement ideas. We reply on weekdays within two business days." : "Yeni tarif önerilerinizi, içerik iş birliklerinizi ve uygulama geliştirme fikirlerinizi e-posta üzerinden iletebilirsiniz. Mesajlara hafta içi en geç iki iş günü içinde dönüş yapıyoruz."}</p><div className="degerler"><span>✓ {ingilizce ? "Recipe suggestion" : "Yeni tarif önerisi"}</span><span>✓ {ingilizce ? "Collaboration request" : "İş birliği talebi"}</span><span>✓ {ingilizce ? "App improvement idea" : "Uygulama geliştirme fikri"}</span></div><a className="ana-buton" href="mailto:merhaba@mutfaktabugun.com?subject=Mutfakta%20Bug%C3%BCn%20ileti%C5%9Fim">{ingilizce ? "Send a message" : "Mesaj gönder"}</a><p className="eposta-adresi">{ingilizce ? "Email" : "E-posta"}: merhaba@mutfaktabugun.com</p><p className="eposta-adresi">{ingilizce ? "Phone" : "Telefon"}: <a href="tel:+902125550123">+90 (212) 555 01 23</a></p></article></section>
-  </main>;
+function TarifKarti({ tarif, dil, baslat }: { tarif: Tarif; dil: Dil; baslat: (r: Tarif) => Promise<void> }) {
+  const t = metin[dil]; const x = dil === "en" ? tarif.ingilizce : tarif;
+  return <article className="tarif-karti"><div className="kart-emoji" aria-hidden="true">{tarif.id === 15 ? <><VisualScene anahtar="baked-pasta" emoji={tarif.emoji} compact /><i /></> : <><span>{tarif.emoji}</span><i /></>}</div><div className="kart-icerigi"><span className="ust-etiket">{kategoriMetni(tarif.kategori, dil)}</span><h3>{x.ad}</h3><p>{x.aciklama}</p><div className="tarif-bilgileri"><span>⏱ {sureMetni(tarif.sure, dil)}</span><span>◈ {zorlukMetni(tarif.zorluk, dil)}</span></div><p className="dinamik-not">{t.dynamic}</p><button className="ana-buton" onClick={() => void baslat(tarif)}>{t.start}<span aria-hidden="true">→</span></button></div></article>;
 }
 
-function DurumEkrani({ emoji, baslik, metin, children, yukleniyor = false }: { emoji: string; baslik: string; metin?: string; children?: ReactNode; yukleniyor?: boolean }) {
-  return <main className="uygulama durum-ekrani"><div className={yukleniyor ? "durum-emoji yukleme-svg" : "durum-emoji"}>{yukleniyor ? <LoadingSvg /> : emoji}</div><span className="ust-etiket">AFİYET OLSUN</span><h1>{baslik}</h1>{metin && <p>{metin}</p>}{children}</main>;
+function InfoStrip({ dil, sayfaAc }: { dil: Dil; sayfaAc: (s: Sayfa) => void }) { const t = metin[dil]; return <section className="bilgi-alani"><div><span className="bolum-kicker">{t.about}</span><h2>{dil === "en" ? "A calm, private kitchen companion" : "Sade, kişisel ve güvenli bir mutfak yardımcısı"}</h2><p>{dil === "en" ? "Recipes run locally on your device and adapt to the answers you give during cooking." : "Tarifler cihazınızda çalışır ve yemek sırasında verdiğiniz yanıtlara göre size uyarlanır."}</p></div><div className="iletisim-karti"><AnimatedBowl /><h3>{t.contact}</h3><p>{dil === "en" ? "Questions, feedback or recipe suggestions are welcome." : "Soru, geri bildirim ve tarif önerilerinizi paylaşabilirsiniz."}</p><button className="ana-buton" onClick={() => sayfaAc("about")}>{dil === "en" ? "Contact details" : "İletişim bilgileri"}</button></div></section>; }
+
+function AboutPage({ dil }: { dil: Dil }) { const t = metin[dil]; return <section className="bilgi-sayfasi"><div className="bilgi-kahraman"><AnimatedBowl /><span className="bolum-kicker">{t.about}</span><h1>{dil === "en" ? "Cooking guidance without the clutter" : "Karmaşa olmadan, adım adım yemek rehberi"}</h1><p>{dil === "en" ? "Mutfakta Bugün turns each recipe into a clear interactive flow and recalculates quantities from your choices." : "Mutfakta Bugün, her tarifi anlaşılır bir etkileşimli akışa dönüştürür ve miktarları seçimlerinize göre yeniden hesaplar."}</p></div><div className="bilgi-kartlari"><article className="hakkimizda-karti"><div className="bilgi-ikon" aria-hidden="true">✦</div><span className="bolum-kicker">{dil === "en" ? "OUR APPROACH" : "YAKLAŞIMIMIZ"}</span><h2>{dil === "en" ? "Useful at the exact moment you need it" : "Tam ihtiyaç duyduğunuz anda faydalı"}</h2><p>{dil === "en" ? "Instead of a long static page, the app asks only what matters and presents the next action clearly." : "Uzun ve durağan bir sayfa yerine uygulama yalnızca gerekli soruları sorar ve sıradaki işlemi açıkça gösterir."}</p><div className="degerler"><span>✓ {dil === "en" ? "22 adaptive recipes" : "22 uyarlanabilir tarif"}</span><span>✓ {dil === "en" ? "Turkish and English" : "Türkçe ve İngilizce"}</span><span>✓ {dil === "en" ? "Works locally" : "Yerel çalışma"}</span></div></article><article className="iletisim-sayfa-karti"><div className="bilgi-ikon" aria-hidden="true">✉</div><span className="bolum-kicker">{t.contact}</span><h2>{dil === "en" ? "Let's improve the kitchen together" : "Mutfağı birlikte geliştirelim"}</h2><p>{dil === "en" ? "For feedback, accessibility issues and recipe suggestions, contact the developer." : "Geri bildirim, erişilebilirlik sorunları ve tarif önerileri için geliştiriciyle iletişime geçebilirsiniz."}</p><p className="eposta-adresi">Ayşegül Avcı<br />152927504+KLU5230505062@users.noreply.github.com</p><a className="ana-buton" href="mailto:152927504+KLU5230505062@users.noreply.github.com">{dil === "en" ? "Send an email" : "E-posta gönder"}</a></article></div></section>; }
+
+function PrivacyPage({ dil }: { dil: Dil }) { return <section className="bilgi-sayfasi"><div className="bilgi-kahraman"><div className="bilgi-ikon merkez" aria-hidden="true">⌁</div><span className="bolum-kicker">{dil === "en" ? "PRIVACY" : "GİZLİLİK"}</span><h1>{dil === "en" ? "Your cooking choices stay on your device" : "Mutfak tercihleriniz cihazınızda kalır"}</h1><p>{dil === "en" ? "This version does not require an account and does not send recipe answers to an external service." : "Bu sürüm hesap gerektirmez ve tarif yanıtlarınızı harici bir servise göndermez."}</p></div><div className="gizlilik-listesi"><article><span>01</span><div><h2>{dil === "en" ? "Data we use" : "Kullandığımız veriler"}</h2><p>{dil === "en" ? "The app temporarily uses your recipe answers to calculate the current cooking flow. They are discarded when the session closes." : "Uygulama, mevcut yemek akışını hesaplamak için tarif yanıtlarınızı geçici olarak kullanır. Oturum kapandığında bu yanıtlar silinir."}</p></div></article><article><span>02</span><div><h2>{dil === "en" ? "Stored preference" : "Saklanan tercih"}</h2><p>{dil === "en" ? "Only your selected interface language is stored locally so the next launch opens in the same language." : "Yalnızca seçtiğiniz arayüz dili, sonraki açılışta aynı dili göstermek amacıyla yerel olarak saklanır."}</p></div></article><article><span>03</span><div><h2>{dil === "en" ? "No account or analytics" : "Hesap ve analiz yok"}</h2><p>{dil === "en" ? "There is no sign-up, advertising profile or built-in analytics tracking in this version." : "Bu sürümde üyelik, reklam profili veya yerleşik analiz takibi bulunmaz."}</p></div></article></div></section>; }
+
+function SenaryoEkrani({ tarif, dil, g, cevapla, kapat }: { tarif: Tarif; dil: Dil; g: Guncelleme; cevapla: (c: Cevap) => Promise<void>; kapat: () => Promise<void> }) {
+  const t = metin[dil]; const ad = dil === "en" ? tarif.ingilizce.ad : tarif.ad; const k = g.komut; const ilerleme = Math.max(0, Math.min(100, g.ilerleme));
+  return <main className="uygulama senaryo-sayfasi"><header className="senaryo-ust"><button className="geri-buton" onClick={() => void kapat()}>← {t.back}</button><div><span aria-hidden="true">{tarif.emoji}</span><strong>{ad}</strong></div></header><div className="senaryo-ilerleme"><div className="ilerleme-cubugu" role="progressbar" aria-label={t.progress} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(ilerleme)}><div className="ilerleme" style={{ width: `${ilerleme}%` }} /></div><span>{g.ilerlemeMesaji || `${Math.round(ilerleme)}%`}</span></div><section className={`komut-karti sonuc-${g.durum}`}><Gorsel anahtar={k?.visualKey} emoji={tarif.emoji} /><span className="ust-etiket">{g.durum === "waiting" ? t.waiting : g.durum === "success" ? t.success : t.fail}</span><h1>{k?.baslik || ad}</h1>{k?.mesaj && <p>{k.mesaj}</p>}{g.durum === "waiting" && k && <KomutGovdesi key={g.istekId} komut={k} cevapla={cevapla} dil={dil} />}{g.durum !== "waiting" && <button className="ana-buton" onClick={() => void kapat()}>{dil === "en" ? "Back to recipes" : "Tariflere dön"}</button>}</section></main>;
 }
 
+function KomutGovdesi({ komut, cevapla, dil }: { komut: Komut; cevapla: (c: Cevap) => Promise<void>; dil: Dil }) { const t = metin[dil]; const [sayi, setSayi] = useState(String(komut.varsayilan ?? "")); const inputId = "tarif-sayisi"; if (komut.tur === "number") return <form className="komut-form" onSubmit={(e: FormEvent) => { e.preventDefault(); const n = Number(sayi); if (Number.isFinite(n)) void cevapla({ sayi: n }); }}><label className="sr-only" htmlFor={inputId}>{komut.baslik || t.numberLabel}</label><input id={inputId} aria-label={komut.baslik || t.numberLabel} autoFocus type="number" value={sayi} min={komut.minimum} max={komut.maksimum} step="any" onChange={e => setSayi(e.target.value)} /><div className="komut-butonlari"><button type="button" className="ikincil-buton" onClick={() => void cevapla({ iptal: true })}>{komut.iptalMetni || t.cancel}</button><button className="ana-buton">{komut.onayMetni || t.save}</button></div></form>; if (komut.tur === "choice") return <div className="secenek-listesi">{komut.secenekler?.map(s => <button key={s.value} onClick={() => void cevapla({ metin: s.value })}><span aria-hidden="true">{ikon(s.visualKey || s.value)}</span><strong>{s.label}</strong></button>)}<button className="metin-buton" onClick={() => void cevapla({ iptal: true })}>{t.cancel}</button></div>; if (komut.tur === "confirm") return <div className="komut-butonlari"><button className="ikincil-buton" onClick={() => void cevapla({ onay: false })}>{komut.iptalMetni || t.no}</button><button className="ana-buton" onClick={() => void cevapla({ onay: true })}>{komut.onayMetni || t.yes}</button></div>; if (komut.tur === "list") return <><ul className="komut-listesi">{komut.ogeler?.map((x, i) => <li key={i}>{x}</li>)}</ul><button className="ana-buton" onClick={() => void cevapla({ onay: true })}>{komut.onayMetni || t.ok}</button></>; if (komut.tur === "timer") return <Sayac sure={komut.sure || 0} dil={dil} bitir={eylem => cevapla({ eylem })} />; return <button className="ana-buton" onClick={() => void cevapla({ onay: true })}>{komut.onayMetni || t.ok}</button>; }
+
+export function Sayac({ sure, dil, bitir }: { sure: number; dil: Dil; bitir: (x: string) => Promise<void> }) { const t = metin[dil]; const [kalan, setKalan] = useState(sure); const [calisiyor, setCalisiyor] = useState(false); useEffect(() => { if (!calisiyor || kalan <= 0) return; const id = window.setInterval(() => setKalan(x => Math.max(0, x - 1)), 1000); return () => clearInterval(id); }, [calisiyor, kalan]); useEffect(() => { if (kalan === 0) void bitir("completed"); }, [kalan]); const dk = Math.floor(kalan / 60), sn = kalan % 60; return <div className="sayac"><div className="sayac-zaman" role="timer" aria-live="polite">{String(dk).padStart(2, "0")}:{String(sn).padStart(2, "0")}</div><div className="komut-butonlari">{!calisiyor && kalan === sure && <button className="ana-buton" onClick={() => setCalisiyor(true)}>{t.timerStart}</button>}{calisiyor && <button className="ikincil-buton" onClick={() => setCalisiyor(false)}>{t.pause}</button>}{!calisiyor && kalan < sure && kalan > 0 && <button className="ana-buton" onClick={() => setCalisiyor(true)}>{t.resume}</button>}<button className="metin-buton" onClick={() => void bitir("closed")}>{t.close}</button></div></div>; }
+function Gorsel({ anahtar, emoji }: { anahtar?: string; emoji: string }) { return <div className="senaryo-gorsel"><VisualScene anahtar={anahtar} emoji={emoji} /></div>; }
+function VisualScene({ anahtar, emoji, compact = false }: { anahtar?: string; emoji: string; compact?: boolean }) {
+  if (anahtar === "baked-pasta") return <svg className={`recipe-visual baked-pasta-visual${compact ? " compact" : ""}`} viewBox="0 0 180 150" role="img" aria-label=""><ellipse className="plate-shadow" cx="90" cy="124" rx="58" ry="10"/><circle className="baked-backdrop" cx="90" cy="70" r="56"/><path className="baked-dish" d="M39 75h102l-10 42H49z"/><path className="baked-rim" d="M35 75h110"/><path className="pasta-line bp1" d="M52 87c12-10 21 10 33 0s21 10 33 0 18 7 22 2"/><path className="pasta-line bp2" d="M54 99c11-9 19 9 30 0s19 9 30 0 17 7 21 2"/><circle className="cheese-dot bc1" cx="65" cy="82" r="4"/><circle className="cheese-dot bc2" cx="101" cy="91" r="4"/><circle className="cheese-dot bc3" cx="123" cy="83" r="3"/><path className="heat heat-one" d="M68 65c-7-7 7-10 0-17"/><path className="heat heat-two" d="M90 62c-7-7 7-10 0-17"/><path className="heat heat-three" d="M112 65c-7-7 7-10 0-17"/><path className="spark sp1" d="M37 39l4 8 8 4-8 4-4 8-4-8-8-4 8-4z"/><path className="spark sp2" d="M143 31l3 6 6 3-6 3-3 6-3-6-6-3 6-3z"/></svg>;
+  if (anahtar === "oven") return <svg className={`recipe-visual oven-visual${compact ? " compact" : ""}`} viewBox="0 0 180 150" role="img" aria-label=""><rect className="oven-shell" x="24" y="16" width="132" height="118" rx="20"/><circle className="oven-knob" cx="48" cy="38" r="6"/><circle className="oven-knob" cx="68" cy="38" r="6"/><path className="oven-window" d="M40 54h100v62H40z"/><rect className="casserole" x="55" y="77" width="70" height="28" rx="8"/><path className="pasta-line p1" d="M64 86c10-9 18 9 28 0s18 9 28 0"/><path className="pasta-line p2" d="M64 95c10-9 18 9 28 0s18 9 28 0"/><circle className="cheese-dot c1" cx="74" cy="83" r="3"/><circle className="cheese-dot c2" cx="104" cy="91" r="3"/><path className="heat heat-one" d="M68 70c-7-7 7-10 0-17"/><path className="heat heat-two" d="M90 70c-7-7 7-10 0-17"/><path className="heat heat-three" d="M112 70c-7-7 7-10 0-17"/></svg>;
+  if (anahtar === "water" || anahtar === "soup") return <svg className="recipe-visual pot-visual" viewBox="0 0 180 150" role="img" aria-label=""><path className="steam s1" d="M65 47c-9-10 9-15 0-28"/><path className="steam s2" d="M90 43c-9-10 9-15 0-28"/><path className="steam s3" d="M115 47c-9-10 9-15 0-28"/><path className="pot-rim" d="M43 63h94"/><path className="pot-body" d="M48 64h84l-8 58H56z"/><path className="pot-handle" d="M48 76H30m102 0h18"/><circle className="bubble b1" cx="72" cy="78" r="5"/><circle className="bubble b2" cx="92" cy="88" r="4"/><circle className="bubble b3" cx="112" cy="75" r="6"/></svg>;
+  if (anahtar === "chop") return <svg className="recipe-visual chop-visual" viewBox="0 0 180 150" role="img" aria-label=""><rect className="board" x="30" y="70" width="120" height="56" rx="15"/><circle className="veg v1" cx="72" cy="96" r="14"/><circle className="veg v2" cx="105" cy="99" r="12"/><path className="knife" d="M48 40l83 20-8 17-80-28z"/><path className="knife-handle" d="M48 40L30 31"/></svg>;
+  if (["pasta", "rice", "salad", "beans", "dessert", "pancake", "smoothie", "meatball", "chocolate", "cookie", "lemon", "ayran", "potato", "chicken", "menemen", "pepper"].includes(anahtar || "")) return <svg className="recipe-visual bowl-visual" viewBox="0 0 180 150" role="img" aria-label=""><ellipse className="plate-shadow" cx="90" cy="124" rx="58" ry="10"/><path className="food-bowl" d="M36 66h108c-5 42-23 62-54 62S41 108 36 66z"/><path className="bowl-rim" d="M32 66h116"/><text className="food-emoji" x="90" y="78" textAnchor="middle">{ikon(anahtar) || emoji}</text><path className="spark sp1" d="M42 38l4 9 9 4-9 4-4 9-4-9-9-4 9-4z"/><path className="spark sp2" d="M138 30l3 6 6 3-6 3-3 6-3-6-6-3 6-3z"/></svg>;
+  return <svg className="recipe-visual default-visual" viewBox="0 0 180 150" role="img" aria-label=""><circle className="visual-orbit" cx="90" cy="75" r="54"/><circle className="visual-core" cx="90" cy="75" r="42"/><text className="default-emoji" x="90" y="91" textAnchor="middle">{emoji}</text><circle className="orbit-dot" cx="90" cy="21" r="6"/></svg>;
+}
+function ikon(k?: string) { const m: Record<string, string> = { pasta: "🍝", water: "💧", pepper: "🌶️", chop: "🔪", soup: "🥣", salad: "🥗", chicken: "🍗", potato: "🥔", dessert: "🍮", oven: "♨️", pancake: "🥞", rice: "🍚", smoothie: "🍌", meatball: "🍖", beans: "🫛", chocolate: "🍫", cookie: "🍪", lemon: "🍋", ayran: "🥛", light: "◌", normal: "◉", rich: "●", soft: "〰", set: "✓", small: "●", medium: "●", large: "⬤" }; return k ? m[k] || "◆" : ""; }
+function AnimatedBowl() { return <svg className="animated-bowl" viewBox="0 0 120 90" role="img" aria-label=""><path className="steam steam-one" d="M42 31c-8-8 8-12 0-21" /><path className="steam steam-two" d="M61 28c-8-8 8-12 0-21" /><path className="steam steam-three" d="M80 31c-8-8 8-12 0-21" /><path className="bowl" d="M19 39h82c-2 27-17 41-41 41S21 66 19 39Z" /><path className="bowl-rim" d="M15 39h90" /></svg>; }
+function Durum({ text }: { text: string }) { return <main className="uygulama durum-ekrani"><AnimatedBowl /><h1>{text}</h1></main>; }
 export default App;

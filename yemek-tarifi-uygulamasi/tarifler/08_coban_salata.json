@@ -1,0 +1,13 @@
+{
+  "id": 8,
+  "ad": "Çoban Salata",
+  "emoji": "🥗",
+  "aciklama": "Sosu ve içeriği tercihlerinize göre ayarlanan salata.",
+  "sure": "15 dakika",
+  "zorluk": "Kolay",
+  "kategori": "Ana Yemekler",
+  "ingilizce": {
+    "ad": "Shepherd's Salad",
+    "aciklama": "Fresh salad adjusted to your dressing preferences."
+  }
+}

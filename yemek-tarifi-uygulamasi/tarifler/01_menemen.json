@@ -1,0 +1,13 @@
+{
+  "id": 1,
+  "ad": "Menemen",
+  "emoji": "🍳",
+  "aciklama": "Domates, biber ve yumurtayla dinamik menemen rehberi.",
+  "sure": "20 dakika",
+  "zorluk": "Kolay",
+  "kategori": "Ana Yemekler",
+  "ingilizce": {
+    "ad": "Menemen",
+    "aciklama": "An interactive tomato, pepper and egg recipe."
+  }
+}

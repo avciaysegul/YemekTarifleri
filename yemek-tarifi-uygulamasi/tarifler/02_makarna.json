@@ -1,0 +1,13 @@
+{
+  "id": 2,
+  "ad": "Domates Soslu Makarna",
+  "emoji": "🍝",
+  "aciklama": "Porsiyon ve kıvam tercihlerinize göre makarna.",
+  "sure": "25 dakika",
+  "zorluk": "Kolay",
+  "kategori": "Ana Yemekler",
+  "ingilizce": {
+    "ad": "Tomato Sauce Pasta",
+    "aciklama": "Pasta adapted to your portions and texture preferences."
+  }
+}

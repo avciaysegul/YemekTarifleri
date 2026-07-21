@@ -2,248 +2,406 @@ package main
 
 import (
 	"context"
-	_ "embed"
+	"crypto/rand"
+	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	lua "github.com/yuin/gopher-lua"
 )
 
-//go:embed lua/tarif_akisi.lua
-var tarifAkisiKodu string
+//go:embed tarifler/*.json
+var metadataDosyalari embed.FS
 
-//go:embed tarifler/tarifler.json
-var tarifVerisi []byte
+//go:embed lua/tarifler/*.lua
+var tarifDosyalari embed.FS
 
-// App, Wails uygulamasının ana yapısıdır.
 type App struct {
-	ctx context.Context
+	ctx    context.Context
+	mu     sync.Mutex
+	oturum *senaryoOturumu
 }
 
-// TarifAdimi, tarifteki tek bir adımı temsil eder.
-type TarifAdimi struct {
-	Baslik    string `json:"baslik"`
-	Aciklama  string `json:"aciklama"`
-	Emoji     string `json:"emoji"`
-	Animasyon string `json:"animasyon"`
-	Bekleme   string `json:"bekleme"`
-}
-
-// YemekTarifi, bir yemeğe ait bütün bilgileri tutar.
-type YemekTarifi struct {
-	ID         int            `json:"id"`
-	Ad         string         `json:"ad"`
-	Emoji      string         `json:"emoji"`
-	Aciklama   string         `json:"aciklama"`
-	Sure       string         `json:"sure"`
-	Zorluk     string         `json:"zorluk"`
-	Kategori   string         `json:"kategori"`
-	Malzemeler []string       `json:"malzemeler"`
-	Adimlar    []TarifAdimi   `json:"adimlar"`
-	Ingilizce  *TarifCevirisi `json:"ingilizce,omitempty"`
-}
-
-// TarifCevirisi, tarifin alternatif dildeki metin içeriğini tutar.
-// Emoji, animasyon ve süre bilgisi ana tariften paylaşılır.
 type TarifCevirisi struct {
-	Ad         string       `json:"ad"`
-	Aciklama   string       `json:"aciklama"`
-	Malzemeler []string     `json:"malzemeler"`
-	Adimlar    []TarifAdimi `json:"adimlar"`
+	Ad       string `json:"ad"`
+	Aciklama string `json:"aciklama"`
 }
 
-// TarifAkisiDurumu, Lua tarif motorunun arayüze döndürdüğü anlık durumdur.
-// Adım seçimi, ilerleme hesabı ve tamamlanma kararı Lua içinde verilir.
-type TarifAkisiDurumu struct {
-	AktifAdim     int     `json:"aktifAdim"`
-	Ilerleme      float64 `json:"ilerleme"`
-	Tamamlandi    bool    `json:"tamamlandi"`
-	Bekleme       string  `json:"bekleme"`
-	OncekiAdimVar bool    `json:"oncekiAdimVar"`
-	IleriTamamlar bool    `json:"ileriTamamlar"`
+type TarifOzeti struct {
+	ID        int           `json:"id"`
+	Ad        string        `json:"ad"`
+	Emoji     string        `json:"emoji"`
+	Aciklama  string        `json:"aciklama"`
+	Sure      string        `json:"sure"`
+	Zorluk    string        `json:"zorluk"`
+	Kategori  string        `json:"kategori"`
+	Senaryo   string        `json:"-"`
+	Ingilizce TarifCevirisi `json:"ingilizce"`
 }
 
-// NewApp, yeni bir App nesnesi oluşturur.
-func NewApp() *App {
-	return &App{}
+type SenaryoSecenegi struct {
+	Value     string `json:"value"`
+	Label     string `json:"label"`
+	VisualKey string `json:"visualKey,omitempty"`
 }
 
-// startup, uygulama açıldığında çalışır.
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
+type UIKomutu struct {
+	Tur        string            `json:"tur"`
+	Baslik     string            `json:"baslik"`
+	Mesaj      string            `json:"mesaj"`
+	VisualKey  string            `json:"visualKey,omitempty"`
+	OnayMetni  string            `json:"onayMetni,omitempty"`
+	IptalMetni string            `json:"iptalMetni,omitempty"`
+	Varsayilan *float64          `json:"varsayilan,omitempty"`
+	Minimum    *float64          `json:"minimum,omitempty"`
+	Maksimum   *float64          `json:"maksimum,omitempty"`
+	Sure       int               `json:"sure,omitempty"`
+	Secenekler []SenaryoSecenegi `json:"secenekler,omitempty"`
+	Ogeler     []string          `json:"ogeler,omitempty"`
 }
 
-// TarifleriGetir, tarif içeriklerini JSON veri kaynağından okur.
-func (a *App) TarifleriGetir() ([]YemekTarifi, error) {
-	var tarifler []YemekTarifi
-	if err := json.Unmarshal(tarifVerisi, &tarifler); err != nil {
-		return nil, fmt.Errorf("tarif JSON verisi okunamadı: %w", err)
+type SenaryoGuncellemesi struct {
+	OturumID       string    `json:"oturumId"`
+	IstekID        string    `json:"istekId,omitempty"`
+	Durum          string    `json:"durum"`
+	Ilerleme       float64   `json:"ilerleme"`
+	IlerlemeMesaji string    `json:"ilerlemeMesaji,omitempty"`
+	Komut          *UIKomutu `json:"komut,omitempty"`
+}
+
+type SenaryoCevabi struct {
+	Sayi  *float64 `json:"sayi,omitempty"`
+	Metin *string  `json:"metin,omitempty"`
+	Onay  *bool    `json:"onay,omitempty"`
+	Eylem string   `json:"eylem,omitempty"`
+	Iptal bool     `json:"iptal,omitempty"`
+}
+
+type senaryoOturumu struct {
+	id             string
+	l              *lua.LState
+	thread         *lua.LState
+	fn             *lua.LFunction
+	istekSayaci    int
+	bekleyenID     string
+	bekleyenTur    string
+	bekleyenKomut  *UIKomutu
+	ilerleme       float64
+	ilerlemeMesaji string
+}
+
+const uiKoprusu = `
+local function ui_yield(kind, options)
+  return coroutine.yield({ kind = kind, options = options or {} })
+end
+function dialog_number(options) return ui_yield("number", options) end
+function dialog_choice(options) return ui_yield("choice", options) end
+function dialog_confirm(options) return ui_yield("confirm", options) end
+function dialog_ok(options) return ui_yield("ok", options) end
+function show_list(options) return ui_yield("list", options) end
+function show_timer(options) return ui_yield("timer", options) end
+function progress(message, percentage) return ui_yield("progress", { message=message, percentage=percentage }) end
+function success(options) ui_yield("success", options); error("success() sonrasinda senaryo devam edemez") end
+function fail(options) ui_yield("fail", options); error("fail() sonrasinda senaryo devam edemez") end
+`
+
+func NewApp() *App                         { return &App{} }
+func (a *App) startup(ctx context.Context) { a.ctx = ctx }
+func (a *App) shutdown(context.Context)    { a.mu.Lock(); defer a.mu.Unlock(); a.oturumuKapat() }
+
+func (a *App) TarifleriGetir() ([]TarifOzeti, error) {
+	dosyalar, err := metadataDosyalari.ReadDir("tarifler")
+	if err != nil {
+		return nil, fmt.Errorf("tarif metadata klasoru okunamadi: %w", err)
 	}
-	if len(tarifler) == 0 {
-		return nil, fmt.Errorf("tarif JSON verisinde tarif bulunamadı")
+
+	tarifler := make([]TarifOzeti, 0, len(dosyalar))
+	for _, dosya := range dosyalar {
+		if dosya.IsDir() || !strings.HasSuffix(dosya.Name(), ".json") {
+			continue
+		}
+		veri, err := metadataDosyalari.ReadFile("tarifler/" + dosya.Name())
+		if err != nil {
+			return nil, fmt.Errorf("%s okunamadi: %w", dosya.Name(), err)
+		}
+		var tarif TarifOzeti
+		if err := json.Unmarshal(veri, &tarif); err != nil {
+			return nil, fmt.Errorf("%s gecersiz JSON: %w", dosya.Name(), err)
+		}
+		tarif.Senaryo = strings.TrimSuffix(dosya.Name(), ".json") + ".lua"
+		tarifler = append(tarifler, tarif)
 	}
-
-	gorulenIDler := make(map[int]bool, len(tarifler))
-
+	gorulen := map[int]bool{}
 	for _, tarif := range tarifler {
-		if err := tarifDogrula(tarif); err != nil {
-			return nil, err
+		if tarif.ID <= 0 || strings.TrimSpace(tarif.Ad) == "" || strings.TrimSpace(tarif.Senaryo) == "" {
+			return nil, fmt.Errorf("gecersiz tarif katalog kaydi")
 		}
-		if gorulenIDler[tarif.ID] {
-			return nil, fmt.Errorf(
-				"%d numaralı tarif kimliği birden fazla kullanılmış",
-				tarif.ID,
-			)
+		if gorulen[tarif.ID] {
+			return nil, fmt.Errorf("%d numarali tarif birden fazla tanimli", tarif.ID)
 		}
-
-		gorulenIDler[tarif.ID] = true
+		if _, err := tarifDosyalari.ReadFile("lua/tarifler/" + tarif.Senaryo); err != nil {
+			return nil, fmt.Errorf("%s senaryosu bulunamadi", tarif.Senaryo)
+		}
+		gorulen[tarif.ID] = true
 	}
-
-	sort.Slice(
-		tarifler,
-		func(i, j int) bool {
-			return tarifler[i].ID < tarifler[j].ID
-		},
-	)
-
+	sort.Slice(tarifler, func(i, j int) bool { return tarifler[i].ID < tarifler[j].ID })
 	return tarifler, nil
 }
 
-// TarifAkisiniCalistir, tarifin bir sonraki durumunu Lua tarif motoruna
-// hesaplatır. Arayüz yalnızca bu sonucu görüntüler; akış kararı Go veya
-// TypeScript'te verilmez.
-func (a *App) TarifAkisiniCalistir(tarifID, adimSayisi, mevcutAdim int, komut, animasyon, bekleme string) (TarifAkisiDurumu, error) {
-	if tarifID <= 0 {
-		return TarifAkisiDurumu{}, fmt.Errorf("geçersiz tarif kimliği")
+func (a *App) SenaryoBaslat(tarifID int, dil string) (SenaryoGuncellemesi, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.oturum != nil {
+		return SenaryoGuncellemesi{}, fmt.Errorf("once calisan tarifi kapatin")
 	}
-
-	// Akışın girdisi arayüzden gelen görsel bilgi değil, tarifin gerçek
-	// adımlarıdır. Böylece hangi adıma geçileceği ve o adımın bekleme süresi
-	// Lua tarafından tarifin kendisine göre belirlenir.
+	if dil != "tr" && dil != "en" {
+		return SenaryoGuncellemesi{}, fmt.Errorf("desteklenmeyen dil")
+	}
 	tarifler, err := a.TarifleriGetir()
 	if err != nil {
-		return TarifAkisiDurumu{}, err
+		return SenaryoGuncellemesi{}, err
 	}
-
-	var tarif *YemekTarifi
+	var secili *TarifOzeti
 	for i := range tarifler {
 		if tarifler[i].ID == tarifID {
-			tarif = &tarifler[i]
+			secili = &tarifler[i]
 			break
 		}
 	}
-	if tarif == nil {
-		return TarifAkisiDurumu{}, fmt.Errorf("%d numaralı tarif bulunamadı", tarifID)
+	if secili == nil {
+		return SenaryoGuncellemesi{}, fmt.Errorf("tarif bulunamadi")
 	}
-	if adimSayisi != len(tarif.Adimlar) {
-		return TarifAkisiDurumu{}, fmt.Errorf("tarif adım sayısı güncel değil")
+	kod, err := tarifDosyalari.ReadFile("lua/tarifler/" + secili.Senaryo)
+	if err != nil {
+		return SenaryoGuncellemesi{}, err
 	}
-
-	luaDurumu := lua.NewState()
-	defer luaDurumu.Close()
-
-	if err := luaDurumu.DoString(tarifAkisiKodu); err != nil {
-		return TarifAkisiDurumu{}, fmt.Errorf("Lua tarif motoru çalıştırılamadı: %w", err)
+	l := lua.NewState()
+	if err := l.DoString(uiKoprusu); err != nil {
+		l.Close()
+		return SenaryoGuncellemesi{}, err
 	}
-
-	f := luaDurumu.GetGlobal("tarif_akisini_calistir")
-	if f.Type() != lua.LTFunction {
-		return TarifAkisiDurumu{}, fmt.Errorf("Lua tarif motorunda tarif_akisini_calistir fonksiyonu bulunamadı")
+	l.SetGlobal("language", lua.LString(dil))
+	fn, err := l.LoadString(string(kod))
+	if err != nil {
+		l.Close()
+		return SenaryoGuncellemesi{}, fmt.Errorf("Lua senaryosu yuklenemedi: %w", err)
 	}
-
-	girdi := luaDurumu.NewTable()
-	girdi.RawSetString("tarif_id", lua.LNumber(tarifID))
-	girdi.RawSetString("adim_sayisi", lua.LNumber(adimSayisi))
-	girdi.RawSetString("mevcut_adim", lua.LNumber(mevcutAdim))
-	girdi.RawSetString("komut", lua.LString(komut))
-	adimlar := luaDurumu.NewTable()
-	for i, adim := range tarif.Adimlar {
-		luaAdimi := luaDurumu.NewTable()
-		luaAdimi.RawSetString("animasyon", lua.LString(adim.Animasyon))
-		luaAdimi.RawSetString("bekleme", lua.LString(adim.Bekleme))
-		adimlar.RawSetInt(i+1, luaAdimi)
-	}
-	girdi.RawSetString("adimlar", adimlar)
-
-	if err := luaDurumu.CallByParam(lua.P{Fn: f, NRet: 1, Protect: true}, girdi); err != nil {
-		return TarifAkisiDurumu{}, fmt.Errorf("Lua tarif algoritması çalıştırılamadı: %w", err)
-	}
-	deger := luaDurumu.Get(-1)
-	luaDurumu.Pop(1)
-	sonuc, tamam := deger.(*lua.LTable)
-	if !tamam {
-		return TarifAkisiDurumu{}, fmt.Errorf("Lua tarif algoritması tablo sonucu döndürmelidir")
-	}
-
-	return TarifAkisiDurumu{
-		AktifAdim:     tablodanIntAl(sonuc, "aktif_adim"),
-		Ilerleme:      float64(tablodanSayiAl(sonuc, "ilerleme")),
-		Tamamlandi:    lua.LVAsBool(sonuc.RawGetString("tamamlandi")),
-		Bekleme:       tablodanMetinAl(sonuc, "bekleme"),
-		OncekiAdimVar: lua.LVAsBool(sonuc.RawGetString("onceki_adim_var")),
-		IleriTamamlar: lua.LVAsBool(sonuc.RawGetString("ileri_tamamlar")),
-	}, nil
+	thread, _ := l.NewThread()
+	a.oturum = &senaryoOturumu{id: yeniID(), l: l, thread: thread, fn: fn}
+	return a.devamEt(nil)
 }
 
-// tarifDogrula, JSON tarif verisinin arayüz için eksiksiz olduğunu doğrular.
-func tarifDogrula(tarif YemekTarifi) error {
-	if tarif.ID <= 0 {
-		return fmt.Errorf("tarif id bilgisi eksik")
+func (a *App) SenaryoCevapla(oturumID, istekID string, cevap SenaryoCevabi) (SenaryoGuncellemesi, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.oturum == nil || a.oturum.id != oturumID {
+		return SenaryoGuncellemesi{}, fmt.Errorf("aktif tarif oturumu bulunamadi")
 	}
-	if strings.TrimSpace(tarif.Ad) == "" || strings.TrimSpace(tarif.Emoji) == "" {
-		return fmt.Errorf("%d numaralı tarifin adı veya emojisi eksik", tarif.ID)
+	if a.oturum.bekleyenID != istekID {
+		return SenaryoGuncellemesi{}, fmt.Errorf("cevap eski veya baska bir istege ait")
 	}
-	if strings.TrimSpace(tarif.Sure) == "" || strings.TrimSpace(tarif.Zorluk) == "" {
-		return fmt.Errorf("%d numaralı tarifin süre veya zorluk bilgisi eksik", tarif.ID)
+	deger, err := cevabiLuaDegerineCevir(a.oturum.bekleyenTur, a.oturum.bekleyenKomut, cevap)
+	if err != nil {
+		return SenaryoGuncellemesi{}, err
 	}
-	if len(tarif.Malzemeler) == 0 || len(tarif.Adimlar) == 0 {
-		return fmt.Errorf("%d numaralı tarifin malzemeleri veya adımları eksik", tarif.ID)
+	a.oturum.bekleyenID, a.oturum.bekleyenTur = "", ""
+	a.oturum.bekleyenKomut = nil
+	return a.devamEt([]lua.LValue{deger})
+}
+
+func (a *App) SenaryoIptal(oturumID string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.oturum == nil {
+		return nil
 	}
-	for indeks, adim := range tarif.Adimlar {
-		if strings.TrimSpace(adim.Baslik) == "" || strings.TrimSpace(adim.Aciklama) == "" {
-			return fmt.Errorf("%d numaralı tarifin %d. adımı eksik", tarif.ID, indeks+1)
-		}
+	if a.oturum.id != oturumID {
+		return fmt.Errorf("aktif tarif oturumu eslesmiyor")
 	}
+	a.oturumuKapat()
 	return nil
 }
 
-// tablodanMetinAl, Lua algoritması sonucundan metin alır.
-func tablodanMetinAl(
-	tablo *lua.LTable,
-	alan string,
-) string {
-	deger := tablo.RawGetString(alan)
-
-	metin, tamam := deger.(lua.LString)
-
-	if tamam {
-		return string(metin)
+func (a *App) devamEt(args []lua.LValue) (SenaryoGuncellemesi, error) {
+	o := a.oturum
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		o.l.SetContext(ctx)
+		state, err, values := o.l.Resume(o.thread, o.fn, args...)
+		cancel()
+		o.l.RemoveContext()
+		args = nil
+		if err != nil {
+			id := o.id
+			a.oturumuKapat()
+			return SenaryoGuncellemesi{OturumID: id, Durum: "fail"}, fmt.Errorf("Lua senaryosu calistirilamadi: %w", err)
+		}
+		if state == lua.ResumeOK {
+			id := o.id
+			a.oturumuKapat()
+			return SenaryoGuncellemesi{OturumID: id, Durum: "fail"}, fmt.Errorf("senaryo success() veya fail() ile bitmelidir")
+		}
+		if len(values) == 0 {
+			return SenaryoGuncellemesi{}, fmt.Errorf("Lua UI komutu dondurmedi")
+		}
+		tablo, ok := values[0].(*lua.LTable)
+		if !ok {
+			return SenaryoGuncellemesi{}, fmt.Errorf("gecersiz Lua UI komutu")
+		}
+		tur := lua.LVAsString(tablo.RawGetString("kind"))
+		opts, _ := tablo.RawGetString("options").(*lua.LTable)
+		if tur == "progress" {
+			o.ilerleme = luaNumber(opts, "percentage")
+			o.ilerlemeMesaji = luaString(opts, "message")
+			args = []lua.LValue{lua.LTrue}
+			continue
+		}
+		komut := luaKomutunaCevir(tur, opts)
+		if tur == "success" || tur == "fail" {
+			id := o.id
+			durum := tur
+			ilerleme := o.ilerleme
+			mesaj := o.ilerlemeMesaji
+			if tur == "success" {
+				ilerleme = 100
+			}
+			a.oturumuKapat()
+			return SenaryoGuncellemesi{OturumID: id, Durum: durum, Ilerleme: ilerleme, IlerlemeMesaji: mesaj, Komut: &komut}, nil
+		}
+		o.istekSayaci++
+		o.bekleyenID = fmt.Sprintf("%s-%d", o.id, o.istekSayaci)
+		o.bekleyenTur = tur
+		o.bekleyenKomut = &komut
+		gosterilenIlerleme := o.ilerleme
+		// Tarif ilk ilerleme işaretine ulaşmadan önce de kullanıcının akışın
+		// başladığını ve adımların ilerlediğini görebilmesini sağla.
+		if gosterilenIlerleme == 0 {
+			gosterilenIlerleme = float64(o.istekSayaci * 5)
+			if gosterilenIlerleme > 15 {
+				gosterilenIlerleme = 15
+			}
+		}
+		return SenaryoGuncellemesi{OturumID: o.id, IstekID: o.bekleyenID, Durum: "waiting", Ilerleme: gosterilenIlerleme, IlerlemeMesaji: o.ilerlemeMesaji, Komut: &komut}, nil
 	}
-
-	return ""
 }
 
-// tablodanIntAl, Lua tablosundan sayı alır.
-func tablodanIntAl(
-	tablo *lua.LTable,
-	alan string,
-) int {
-	deger := tablo.RawGetString(alan)
-
-	sayi, tamam := deger.(lua.LNumber)
-
-	if tamam {
-		return int(sayi)
+func luaKomutunaCevir(tur string, t *lua.LTable) UIKomutu {
+	k := UIKomutu{Tur: tur}
+	if t == nil {
+		return k
 	}
-
-	return 0
+	k.Baslik = luaString(t, "title")
+	k.Mesaj = luaString(t, "message")
+	k.VisualKey = luaString(t, "visual_key")
+	k.OnayMetni = luaString(t, "confirm_button")
+	k.IptalMetni = luaString(t, "cancel_button")
+	k.Sure = int(luaNumber(t, "duration"))
+	k.Varsayilan = luaOptionalNumber(t, "default")
+	k.Minimum = luaOptionalNumber(t, "minimum")
+	k.Maksimum = luaOptionalNumber(t, "maximum")
+	if options, ok := t.RawGetString("options").(*lua.LTable); ok {
+		options.ForEach(func(_, v lua.LValue) {
+			if x, ok := v.(*lua.LTable); ok {
+				k.Secenekler = append(k.Secenekler, SenaryoSecenegi{Value: luaString(x, "value"), Label: luaString(x, "label"), VisualKey: luaString(x, "visual_key")})
+			}
+		})
+	}
+	if items, ok := t.RawGetString("items").(*lua.LTable); ok {
+		items.ForEach(func(_, v lua.LValue) { k.Ogeler = append(k.Ogeler, lua.LVAsString(v)) })
+	}
+	return k
 }
 
-func tablodanSayiAl(tablo *lua.LTable, alan string) float64 {
-	if sayi, tamam := tablo.RawGetString(alan).(lua.LNumber); tamam {
-		return float64(sayi)
+func cevabiLuaDegerineCevir(tur string, komut *UIKomutu, c SenaryoCevabi) (lua.LValue, error) {
+	if c.Iptal {
+		return lua.LNil, nil
+	}
+	switch tur {
+	case "number":
+		if c.Sayi == nil {
+			return nil, fmt.Errorf("sayisal cevap gerekli")
+		}
+		if komut != nil && komut.Minimum != nil && *c.Sayi < *komut.Minimum {
+			return nil, fmt.Errorf("sayi minimum degerin altinda")
+		}
+		if komut != nil && komut.Maksimum != nil && *c.Sayi > *komut.Maksimum {
+			return nil, fmt.Errorf("sayi maksimum degerin ustunde")
+		}
+		return lua.LNumber(*c.Sayi), nil
+	case "choice":
+		if c.Metin == nil {
+			return nil, fmt.Errorf("secim cevabi gerekli")
+		}
+		gecerli := false
+		if komut != nil {
+			for _, secenek := range komut.Secenekler {
+				if secenek.Value == *c.Metin {
+					gecerli = true
+					break
+				}
+			}
+		}
+		if !gecerli {
+			return nil, fmt.Errorf("secim sunulan seceneklerden biri degil")
+		}
+		return lua.LString(*c.Metin), nil
+	case "confirm":
+		if c.Onay == nil {
+			return nil, fmt.Errorf("onay cevabi gerekli")
+		}
+		return lua.LBool(*c.Onay), nil
+	case "timer":
+		if c.Eylem != "completed" && c.Eylem != "closed" {
+			return nil, fmt.Errorf("gecersiz sayac sonucu")
+		}
+		return lua.LString(c.Eylem), nil
+	case "ok", "list":
+		return lua.LTrue, nil
+	default:
+		return nil, fmt.Errorf("bilinmeyen cevap turu")
+	}
+}
+
+func (a *App) oturumuKapat() {
+	if a.oturum != nil {
+		a.oturum.l.Close()
+		a.oturum = nil
+	}
+}
+func yeniID() string {
+	b := make([]byte, 8)
+	if _, e := rand.Read(b); e != nil {
+		return "oturum"
+	}
+	return hex.EncodeToString(b)
+}
+func luaString(t *lua.LTable, k string) string {
+	if t == nil {
+		return ""
+	}
+	return lua.LVAsString(t.RawGetString(k))
+}
+func luaNumber(t *lua.LTable, k string) float64 {
+	if t == nil {
+		return 0
+	}
+	if n, ok := t.RawGetString(k).(lua.LNumber); ok {
+		return float64(n)
 	}
 	return 0
+}
+func luaOptionalNumber(t *lua.LTable, k string) *float64 {
+	if t == nil {
+		return nil
+	}
+	if n, ok := t.RawGetString(k).(lua.LNumber); ok {
+		v := float64(n)
+		return &v
+	}
+	return nil
 }

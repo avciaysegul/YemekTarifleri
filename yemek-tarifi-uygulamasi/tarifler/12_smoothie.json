@@ -1,0 +1,13 @@
+{
+  "id": 12,
+  "ad": "Muzlu Smoothie",
+  "emoji": "🍌",
+  "aciklama": "Kıvamı ve tatlılığı ayarlanabilen smoothie.",
+  "sure": "5 dakika",
+  "zorluk": "Kolay",
+  "kategori": "İçecekler",
+  "ingilizce": {
+    "ad": "Banana Smoothie",
+    "aciklama": "A smoothie with adjustable sweetness and thickness."
+  }
+}

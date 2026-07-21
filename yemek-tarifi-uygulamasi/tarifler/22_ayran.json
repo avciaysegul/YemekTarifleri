@@ -1,0 +1,13 @@
+{
+  "id": 22,
+  "ad": "Köpüklü Ayran",
+  "emoji": "🥛",
+  "aciklama": "Tuz, kıvam ve köpüğü size göre ayran.",
+  "sure": "5 dakika",
+  "zorluk": "Kolay",
+  "kategori": "İçecekler",
+  "ingilizce": {
+    "ad": "Frothy Ayran",
+    "aciklama": "Ayran adjusted to your salt, texture and foam preference."
+  }
+}

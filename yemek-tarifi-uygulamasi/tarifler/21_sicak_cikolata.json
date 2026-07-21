@@ -1,0 +1,13 @@
+{
+  "id": 21,
+  "ad": "Sıcak Çikolata",
+  "emoji": "☕",
+  "aciklama": "Yoğunluğu ve tatlılığı seçilebilir sıcak çikolata.",
+  "sure": "10 dakika",
+  "zorluk": "Kolay",
+  "kategori": "İçecekler",
+  "ingilizce": {
+    "ad": "Hot Chocolate",
+    "aciklama": "Hot chocolate with adjustable richness and sweetness."
+  }
+}

@@ -1,34 +1,10 @@
 # Mutfakta Bugün
 
-**Mutfakta Bugün**, Türkçe ve İngilizce yemek tariflerini adım adım gösteren Wails v2 masaüstü uygulamasıdır.
+Her yemeğin kendi değişkenleri, hesaplamaları, kararları ve döngüleri bulunan bağımsız bir Lua programı olarak çalıştığı Wails masaüstü uygulaması.
 
-## Özellikler
+- Go: Lua coroutine oturumları ve güvenli UI fonksiyon köprüsü
+- Lua: 22 bağımsız tarif algoritması
+- React: Lua'nın istediği dialog, liste, sayaç, ilerleme ve sonuç arayüzleri
+- JSON: her tarif için ayrı metadata dosyası
 
-* Tarif, kategori, malzeme ve zorluk filtreleme
-* Türkçe ve İngilizce dil desteği
-* Malzeme kontrol listesi
-* Animasyonlu tarif adımları
-* Geri, ileri, bekleme ve tamamlanma işlemleri
-
-## Kullanılan Teknolojiler
-
-* React ve TypeScript
-* Go
-* Lua
-* Wails v2
-* JSON
-
-## Proje Yapısı
-
-```text
-tarifler.json → Go → React arayüzü
-                  ↓
-             Lua akış motoru
-```
-
-Tarif bilgileri JSON dosyasından okunur. Go, uygulama katmanını ve Wails bağlantısını yönetir. Lua ise tarif adımlarının ilerleyişini kontrol eder.
-
-
-```
-
-Yeni tarifler `tarifler/tarifler.json` dosyasına eklenebilir. Her tarifin benzersiz bir `id` değeri, en az bir malzemesi ve bir adımı bulunmalıdır.
+Uygulama kaynakları `yemek-tarifi-uygulamasi` klasöründedir.

@@ -1,0 +1,13 @@
+{
+  "id": 11,
+  "ad": "Nohutlu Pilav",
+  "emoji": "🍚",
+  "aciklama": "Porsiyona göre su oranı hesaplanan pilav.",
+  "sure": "35 dakika",
+  "zorluk": "Orta",
+  "kategori": "Ana Yemekler",
+  "ingilizce": {
+    "ad": "Chickpea Rice Pilaf",
+    "aciklama": "Rice pilaf with portion-aware water ratios."
+  }
+}

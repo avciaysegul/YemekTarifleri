@@ -1,0 +1,13 @@
+{
+  "id": 15,
+  "ad": "Fırında Makarna",
+  "emoji": "🍝",
+  "aciklama": "Beşamel ve kızarma tercihinize göre fırın makarna.",
+  "sure": "50 dakika",
+  "zorluk": "Orta",
+  "kategori": "Ana Yemekler",
+  "ingilizce": {
+    "ad": "Baked Pasta",
+    "aciklama": "Baked pasta adapted to béchamel and browning preference."
+  }
+}
