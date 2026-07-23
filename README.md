@@ -13,20 +13,20 @@ Uygulama kaynakları `yemek-tarifi-uygulamasi` klasöründedir.
 
 ### Ana sayfa
 
-![Mutfakta Bugün ana sayfası](Görüntüler/1.png)
+![Mutfakta Bugün ana sayfası](yemek-tarifi-uygulamasi/görüntüler/1.png)
 
 ### Tarif listesi
 
-![Tariflerin listelendiği ekran](Görüntüler/3.png)
+![Tariflerin listelendiği ekran](yemek-tarifi-uygulamasi/görüntüler/3.png)
 
 ### Tarif detayları
 
-![Tarif malzemeleri ve pişirmeye başlama ekranı](Görüntüler/4.png)
+![Tarif malzemeleri ve pişirmeye başlama ekranı](yemek-tarifi-uygulamasi/görüntüler/4.png)
 
 ### Adım adım pişirme
 
-![Tarifin adım adım uygulanması](Görüntüler/2.png)
+![Tarifin adım adım uygulanması](yemek-tarifi-uygulamasi/görüntüler/2.png)
 
 ### İletişim
 
-![Mutfakta Bugün iletişim sayfası](Görüntüler/5.png)
+![Mutfakta Bugün iletişim sayfası](yemek-tarifi-uygulamasi/görüntüler/5.png)
