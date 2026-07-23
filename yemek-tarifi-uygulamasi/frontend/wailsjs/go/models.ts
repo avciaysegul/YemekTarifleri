@@ -1,16 +1,16 @@
 export namespace main {
-
+	
 	export class SenaryoCevabi {
 	    sayi?: number;
 	    metin?: string;
 	    onay?: boolean;
 	    eylem?: string;
 	    iptal?: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SenaryoCevabi(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.sayi = source["sayi"];
@@ -24,11 +24,11 @@ export namespace main {
 	    value: string;
 	    label: string;
 	    visualKey?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SenaryoSecenegi(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.value = source["value"];
@@ -49,7 +49,7 @@ export namespace main {
 	    sure?: number;
 	    secenekler?: SenaryoSecenegi[];
 	    ogeler?: string[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new UIKomutu(source);
 	    }
@@ -69,7 +69,7 @@ export namespace main {
 	        this.secenekler = this.convertValues(source["secenekler"], SenaryoSecenegi);
 	        this.ogeler = source["ogeler"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -128,15 +128,15 @@ export namespace main {
 		    return a;
 		}
 	}
-
+	
 	export class TarifCevirisi {
 	    ad: string;
 	    aciklama: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TarifCevirisi(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.ad = source["ad"];
@@ -189,3 +189,4 @@ export namespace main {
 	}
 
 }
+
