@@ -15,7 +15,7 @@ Uygulama kaynakları `yemek-tarifi-uygulamasi` klasöründedir.
 
 ![Mutfakta Bugün ana sayfası](yemek-tarifi-uygulamasi/görüntüler/1.png)
 
-### Kişisel Bilgiler
+### Kişisel Veriler
 
 ![Tariflerin listelendiği ekran](yemek-tarifi-uygulamasi/görüntüler/3.png)
 
