@@ -23,7 +23,7 @@ Uygulama kaynakları `yemek-tarifi-uygulamasi` klasöründedir.
 
 ![Tarif malzemeleri ve pişirmeye başlama ekranı](yemek-tarifi-uygulamasi/görüntüler/4.png)
 
-### İletişim
+### Hakkında
 
 ![Tarifin adım adım uygulanması](yemek-tarifi-uygulamasi/görüntüler/2.png)
 
