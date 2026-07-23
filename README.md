@@ -23,10 +23,10 @@ Uygulama kaynakları `yemek-tarifi-uygulamasi` klasöründedir.
 
 ![Tarif malzemeleri ve pişirmeye başlama ekranı](yemek-tarifi-uygulamasi/görüntüler/4.png)
 
-### Adım adım pişirme
+### İletişim
 
 ![Tarifin adım adım uygulanması](yemek-tarifi-uygulamasi/görüntüler/2.png)
 
-### İletişim
+### Adım Adım Pişirme
 
 ![Mutfakta Bugün iletişim sayfası](yemek-tarifi-uygulamasi/görüntüler/5.png)
