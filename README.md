@@ -15,11 +15,11 @@ Uygulama kaynakları `yemek-tarifi-uygulamasi` klasöründedir.
 
 ![Mutfakta Bugün ana sayfası](yemek-tarifi-uygulamasi/görüntüler/1.png)
 
-### Tarif listesi
+### Kişisel Bilgiler
 
 ![Tariflerin listelendiği ekran](yemek-tarifi-uygulamasi/görüntüler/3.png)
 
-### Tarif detayları
+### Tarif Listesi
 
 ![Tarif malzemeleri ve pişirmeye başlama ekranı](yemek-tarifi-uygulamasi/görüntüler/4.png)
 
